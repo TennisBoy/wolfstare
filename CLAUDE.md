@@ -16,21 +16,29 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite
+dotnet test                                    # full suite (152 tests)
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace
+dotnet test tests/Wolfstare.Service.Tests      # one project
+
+dotnet run --project src/Wolfstare.Service     # API on http://127.0.0.1:8437
 ```
 
 Set `DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1` to keep output readable.
 
-Once the service project exists (phase 2), the development loop is:
+Pin new packages to the **9.x** line. `dotnet add package` defaults to 10.x, which does not
+restore against `net9.0`.
 
-```bash
-dotnet run --project src/Wolfstare.Service -- --console   # elevated; full stack, no service install
-cd web && npm run dev                                      # Vite, proxies /api to the service
+To drive the running API, read the bearer token the service writes on each start. Note that
+`curl` in the Bash tool is intercepted by a hook here — use PowerShell:
+
+```powershell
+$t = Get-Content "$env:ProgramData\Wolfstare\api.token" -Raw
+Invoke-RestMethod http://127.0.0.1:8437/api/status -Headers @{Authorization="Bearer $t"}
 ```
 
-`--console` exists so development never requires an install/uninstall cycle.
+For a throwaway instance, override the data directory and port:
+`-- --Wolfstare:DataDirectory=C:/temp/wolf --Wolfstare:Port=8437`
 
 ## The threat model drives everything
 
@@ -81,6 +89,22 @@ spec §5.3.
 **Timed locks have no early exit** (`Sessions/StopPolicy.cs`). `TimedLock` is an empty record
 and `StopPolicy` has no password branch for it. The absence is the feature: adding an escape
 hatch would have to show up in a diff rather than hiding in a config flag.
+
+### `SessionManager` is the only mutator
+
+Nothing else changes session state, and nothing else decides whether a session may stop — it
+delegates to `StopPolicy` rather than re-deriving lock semantics. Time accrues in exactly two
+methods (`TickAsync`, `ResumeAsync`), so no caller can observe a different elapsed value by
+computing its own.
+
+The API extends this: **anything that would weaken an active block answers 423**, not just
+`stop`. Editing or deleting a block list under a lock is refused for the same reason stopping
+it is — otherwise you could empty a list of its rules and leave the lock technically intact
+but meaningless. Password-locked sessions are included; the caller can `stop` with the
+password first, then edit.
+
+When adding an endpoint, ask what it lets a caller do to an active locked session. If the
+answer is anything at all, it needs the same guard.
 
 ### Rules match identity, never location
 

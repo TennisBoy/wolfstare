@@ -27,8 +27,22 @@ unusual: the adversary is the legitimate owner of the machine, later, in a weake
 
 ## Status
 
-Early development. See [`docs/superpowers/specs/2026-08-27-wolfstare-design.md`](docs/superpowers/specs/2026-08-27-wolfstare-design.md)
-for the full design specification.
+In development, spec-first and test-driven. **152 tests passing.**
+
+| Phase | Scope | State |
+|---|---|---|
+| 1 | Core domain — rules, locks, clock-tamper handling, stop policy | Done |
+| 2 | Persistence, session manager, HTTP API | Done |
+| 3 | Website enforcement — DNS sinkhole, proxy, DoH sealing | Next |
+| 4 | App enforcement — IFEO, ETW watcher, block stub | |
+| 5 | Windows Service hosting, tamper resistance, React UI | |
+
+The service runs today and answers the full REST surface: block lists persist, timed locks
+survive a process kill with downtime correctly credited, and a locked session returns `423`
+to every caller. Nothing is actually blocked yet — that is phase 3.
+
+See [`docs/superpowers/specs/2026-08-27-wolfstare-design.md`](docs/superpowers/specs/2026-08-27-wolfstare-design.md)
+for the design specification and `docs/superpowers/plans/` for the phase plans.
 
 ## Requirements
 
@@ -39,10 +53,19 @@ for the full design specification.
 ## Development
 
 ```
-dotnet run --project src/Wolfstare.Service -- --console   # elevated; runs the full stack
-cd web && npm run dev                                      # Vite dev server, proxies /api
-dotnet test                                                # all tests
+dotnet run --project src/Wolfstare.Service    # API on http://127.0.0.1:8437
+dotnet test                                    # all tests
 ```
 
-`--console` runs the entire service as an ordinary console application, so development
-needs no install/uninstall cycle.
+The API requires a bearer token, written to `%ProgramData%\Wolfstare\api.token` on each start:
+
+```powershell
+$t = Get-Content "$env:ProgramData\Wolfstare\api.token" -Raw
+Invoke-RestMethod http://127.0.0.1:8437/api/status -Headers @{Authorization="Bearer $t"}
+```
+
+Override the data directory and port for a throwaway instance:
+
+```
+dotnet run --project src/Wolfstare.Service -- --Wolfstare:DataDirectory=C:/temp/wolf --Wolfstare:Port=8437
+```
