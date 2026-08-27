@@ -1,0 +1,49 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+artifacts/
+TestResults/
+*.trx
+*.coverage
+*.coverlet.json
+coverage*.xml
+coverage*.json
+
+# Rider / VS / VS Code
+.vs/
+.idea/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Generated API client
+web/src/api/generated/
+
+# Local runtime state (never commit — contains tokens and lock state)
+*.db
+*.db-shm
+*.db-wal
+api.token
+logs/
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
