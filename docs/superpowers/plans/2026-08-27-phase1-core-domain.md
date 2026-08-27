@@ -37,7 +37,7 @@
 - Consumes: nothing
 - Produces: a buildable solution where `dotnet test` runs. Later tasks add files to these two projects.
 
-- [ ] **Step 1: Create the solution and projects**
+- [x] **Step 1: Create the solution and projects**
 
 ```bash
 cd "C:/Users/yinxi/source/repos/wolfstare"
@@ -50,7 +50,7 @@ dotnet sln add tests/Wolfstare.Core.Tests/Wolfstare.Core.Tests.csproj
 dotnet add tests/Wolfstare.Core.Tests reference src/Wolfstare.Core
 ```
 
-- [ ] **Step 2: Add `Directory.Build.props` enforcing the global constraints**
+- [x] **Step 2: Add `Directory.Build.props` enforcing the global constraints**
 
 ```xml
 <Project>
@@ -65,7 +65,7 @@ dotnet add tests/Wolfstare.Core.Tests reference src/Wolfstare.Core
 </Project>
 ```
 
-- [ ] **Step 3: Add `.gitattributes` to normalise line endings**
+- [x] **Step 3: Add `.gitattributes` to normalise line endings**
 
 ```
 * text=auto eol=lf
@@ -76,7 +76,7 @@ dotnet add tests/Wolfstare.Core.Tests reference src/Wolfstare.Core
 *.ps1 text eol=crlf
 ```
 
-- [ ] **Step 4: Write a harness test that proves the wiring**
+- [x] **Step 4: Write a harness test that proves the wiring**
 
 ```csharp
 namespace Wolfstare.Core.Tests;
@@ -92,12 +92,12 @@ public class HarnessTests
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it fails**
+- [x] **Step 5: Run the test to verify it fails**
 
 Run: `dotnet test`
 Expected: FAIL — `CoreMarker` does not exist.
 
-- [ ] **Step 6: Add the marker type**
+- [x] **Step 6: Add the marker type**
 
 Create `src/Wolfstare.Core/CoreMarker.cs`:
 
@@ -108,12 +108,12 @@ namespace Wolfstare.Core;
 public static class CoreMarker;
 ```
 
-- [ ] **Step 7: Run the test to verify it passes**
+- [x] **Step 7: Run the test to verify it passes**
 
 Run: `dotnet test`
 Expected: PASS, 1 test.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
@@ -143,7 +143,7 @@ Spec §4.1. This is the matching engine the DNS sinkhole will call on every look
   - `static string DomainMatcher.Normalize(string host)`
   - `static bool DomainMatcher.Matches(string pattern, string host)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 using Wolfstare.Core.Rules;
@@ -199,12 +199,12 @@ public class DomainMatcherTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test --filter DomainMatcherTests`
 Expected: FAIL — `DomainMatcher` does not exist.
 
-- [ ] **Step 3: Implement `DomainMatcher`**
+- [x] **Step 3: Implement `DomainMatcher`**
 
 ```csharp
 using System.Globalization;
@@ -275,12 +275,12 @@ public static class DomainMatcher
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test --filter DomainMatcherTests`
 Expected: PASS, all cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -307,7 +307,7 @@ Spec §4.1. `AppRule` matches on executable *identity*, never install path — t
   - `sealed record ProcessIdentity(string ImageName, string? Publisher, string? FileDescription)`
   - `bool AppMatcher.Matches(ProcessIdentity identity)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 using Wolfstare.Core.Rules;
@@ -366,12 +366,12 @@ public class AppMatcherTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test --filter AppMatcherTests`
 Expected: FAIL — the types do not exist.
 
-- [ ] **Step 3: Implement `ProcessIdentity`**
+- [x] **Step 3: Implement `ProcessIdentity`**
 
 ```csharp
 namespace Wolfstare.Core.Rules;
@@ -385,7 +385,7 @@ namespace Wolfstare.Core.Rules;
 public sealed record ProcessIdentity(string ImageName, string? Publisher, string? FileDescription);
 ```
 
-- [ ] **Step 4: Implement `AppMatcher` and its cases**
+- [x] **Step 4: Implement `AppMatcher` and its cases**
 
 ```csharp
 namespace Wolfstare.Core.Rules;
@@ -442,7 +442,7 @@ public sealed record FileDescriptionMatcher(string Description) : AppMatcher
 }
 ```
 
-- [ ] **Step 5: Implement `BlockRule`**
+- [x] **Step 5: Implement `BlockRule`**
 
 ```csharp
 namespace Wolfstare.Core.Rules;
@@ -469,12 +469,12 @@ public sealed record AppRule(AppMatcher Matcher) : BlockRule
 public sealed record PathRule(string UrlPattern) : BlockRule;
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `dotnet test --filter AppMatcherTests`
 Expected: PASS, all cases.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -500,7 +500,7 @@ Spec §4.2. Allowlist wins over block rules. This is what makes "block the whole
   - `Decision RuleSet.EvaluateApp(ProcessIdentity identity)`
   - `static RuleSet RuleSet.Empty`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 using Wolfstare.Core.Rules;
@@ -575,12 +575,12 @@ public class RuleSetTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test --filter RuleSetTests`
 Expected: FAIL — `RuleSet` does not exist.
 
-- [ ] **Step 3: Implement `RuleSet`**
+- [x] **Step 3: Implement `RuleSet`**
 
 ```csharp
 namespace Wolfstare.Core.Rules;
@@ -632,12 +632,12 @@ public sealed record RuleSet(IReadOnlyList<BlockRule> Rules, IReadOnlyList<Block
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test --filter RuleSetTests`
 Expected: PASS, all cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -663,7 +663,7 @@ Spec §8.3. An IFEO key on `explorer.exe` leaves the machine with no desktop she
   - `readonly record struct ValidationResult(bool IsValid, string? Error)` with `ValidationResult.Ok`
   - `static ValidationResult RuleValidator.Validate(BlockRule rule)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 using Wolfstare.Core.Rules;
@@ -748,12 +748,12 @@ public class RuleValidatorTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test --filter RuleValidatorTests`
 Expected: FAIL — the types do not exist.
 
-- [ ] **Step 3: Implement `CriticalProcesses`**
+- [x] **Step 3: Implement `CriticalProcesses`**
 
 ```csharp
 namespace Wolfstare.Core.Rules;
@@ -803,7 +803,7 @@ public static class CriticalProcesses
 }
 ```
 
-- [ ] **Step 4: Implement `RuleValidator`**
+- [x] **Step 4: Implement `RuleValidator`**
 
 ```csharp
 namespace Wolfstare.Core.Rules;
@@ -918,12 +918,12 @@ public static class RuleValidator
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `dotnet test --filter RuleValidatorTests`
 Expected: PASS, all cases.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -949,7 +949,7 @@ Spec §4.3. PBKDF2-HMAC-SHA256, 600,000 iterations, constant-time verification.
   - `interface IPasswordHasher { PasswordHash Create(string password); bool Verify(PasswordHash stored, string password); }`
   - `sealed class Pbkdf2PasswordHasher : IPasswordHasher`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 using Wolfstare.Core.Sessions;
@@ -1013,12 +1013,12 @@ public class Pbkdf2PasswordHasherTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test --filter Pbkdf2PasswordHasherTests`
 Expected: FAIL — the types do not exist.
 
-- [ ] **Step 3: Implement `PasswordHash` and `IPasswordHasher`**
+- [x] **Step 3: Implement `PasswordHash` and `IPasswordHasher`**
 
 ```csharp
 namespace Wolfstare.Core.Sessions;
@@ -1037,7 +1037,7 @@ public interface IPasswordHasher
 }
 ```
 
-- [ ] **Step 4: Implement `Pbkdf2PasswordHasher`**
+- [x] **Step 4: Implement `Pbkdf2PasswordHasher`**
 
 ```csharp
 using System.Security.Cryptography;
@@ -1087,12 +1087,12 @@ public sealed class Pbkdf2PasswordHasher : IPasswordHasher
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `dotnet test --filter Pbkdf2PasswordHasherTests`
 Expected: PASS, all cases.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -1122,7 +1122,7 @@ Spec §5. **The most important task in this plan.** A timed lock defeated by `Se
   - `static SessionTiming ElapsedCalculator.Advance(SessionTiming timing, IClock clock)`
   - `static SessionTiming ElapsedCalculator.ResumeAfterRestart(SessionTiming timing, IClock clock)`
 
-- [ ] **Step 1: Write `FakeClock`**
+- [x] **Step 1: Write `FakeClock`**
 
 ```csharp
 using Wolfstare.Core.Time;
@@ -1157,7 +1157,7 @@ public sealed class FakeClock : IClock
 }
 ```
 
-- [ ] **Step 2: Write the failing tests — the full tamper matrix**
+- [x] **Step 2: Write the failing tests — the full tamper matrix**
 
 ```csharp
 using Wolfstare.Core.Time;
@@ -1334,12 +1334,12 @@ public class ElapsedCalculatorTests
 }
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail**
+- [x] **Step 3: Run the tests to verify they fail**
 
 Run: `dotnet test --filter ElapsedCalculatorTests`
 Expected: FAIL — the types do not exist.
 
-- [ ] **Step 4: Implement `IClock` and `SystemClock`**
+- [x] **Step 4: Implement `IClock` and `SystemClock`**
 
 ```csharp
 namespace Wolfstare.Core.Time;
@@ -1366,7 +1366,7 @@ public sealed class SystemClock : IClock
 }
 ```
 
-- [ ] **Step 5: Implement `SessionTiming`**
+- [x] **Step 5: Implement `SessionTiming`**
 
 ```csharp
 namespace Wolfstare.Core.Time;
@@ -1390,7 +1390,7 @@ public sealed record SessionTiming(
 }
 ```
 
-- [ ] **Step 6: Implement `ElapsedCalculator`**
+- [x] **Step 6: Implement `ElapsedCalculator`**
 
 ```csharp
 namespace Wolfstare.Core.Time;
@@ -1458,12 +1458,12 @@ public static class ElapsedCalculator
 }
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `dotnet test --filter ElapsedCalculatorTests`
 Expected: PASS, all cases.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add -A
@@ -1490,7 +1490,7 @@ Spec §4.3 and §10.1. This is where "a timed lock has no early exit" becomes a 
   - `enum StopOutcome { Allowed, PasswordRequired, PasswordIncorrect, Locked }`
   - `static StopOutcome StopPolicy.CanStop(BlockSession session, string? password, IPasswordHasher hasher, IClock clock)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 using Wolfstare.Core.Sessions;
@@ -1629,12 +1629,12 @@ public class StopPolicyTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test --filter StopPolicyTests`
 Expected: FAIL — the types do not exist.
 
-- [ ] **Step 3: Implement `Lock`**
+- [x] **Step 3: Implement `Lock`**
 
 ```csharp
 namespace Wolfstare.Core.Sessions;
@@ -1658,7 +1658,7 @@ public sealed record PasswordLock(PasswordHash Hash) : Lock;
 public sealed record TimedLock : Lock;
 ```
 
-- [ ] **Step 4: Implement `BlockSession`**
+- [x] **Step 4: Implement `BlockSession`**
 
 ```csharp
 using Wolfstare.Core.Time;
@@ -1688,7 +1688,7 @@ public sealed record BlockSession(
 }
 ```
 
-- [ ] **Step 5: Implement `StopPolicy`**
+- [x] **Step 5: Implement `StopPolicy`**
 
 ```csharp
 using Wolfstare.Core.Time;
@@ -1744,22 +1744,22 @@ public static class StopPolicy
 }
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `dotnet test --filter StopPolicyTests`
 Expected: PASS, all cases.
 
-- [ ] **Step 7: Run the whole suite**
+- [x] **Step 7: Run the whole suite**
 
 Run: `dotnet test`
 Expected: PASS, every test in the solution.
 
-- [ ] **Step 8: Verify the Core project has no Windows dependencies**
+- [x] **Step 8: Verify the Core project has no Windows dependencies**
 
 Run: `dotnet list src/Wolfstare.Core/Wolfstare.Core.csproj package`
 Expected: no packages. Confirm the TFM in the csproj is `net9.0`, not `net9.0-windows`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add -A
@@ -1779,3 +1779,46 @@ git commit -m "Add session locks and stop authorisation policy"
 ## Next Phase
 
 Phase 2 covers SQLite persistence, the ASP.NET Core Minimal API implementing spec §10, and the CLI — turning this library into a runnable service that returns `423 Locked` to every caller.
+
+---
+
+## Execution record
+
+Completed 2026-08-27. Final state: **96 tests passing**, `Wolfstare.Core` on `net9.0` with
+zero package references.
+
+### Deviations from the plan as written
+
+1. **`Lock` renamed to `SessionLock`.** .NET 9 introduced `System.Threading.Lock`, and with
+   `ImplicitUsings` enabled the ambiguity is a compile error at every use site. Caught at
+   Task 8's red step.
+
+2. **`IsExpired()` and `RemainingSeconds()` take no `IClock`.** The plan gave them a clock
+   parameter that neither implementation used, since both read only from already-accrued
+   `ElapsedSeconds`. Taking a clock would have implied a dependency that is not there, and
+   invited a future implementation to accrue time in a second place.
+
+3. **`ElapsedCalculator.Advance` handles backward clock jumps differently.** The plan
+   specified `clamp(min(wallDelta, monotonicDelta), 0, monotonicDelta)`. The
+   `AccrualNeverGoesBackwardsUnderAnAdversarialClockSequence` test failed against it: when the
+   wall clock moves backward the minimum is negative, so the clamp forfeits the tick entirely
+   — discarding honest time the monotonic counter had already earned.
+
+   Not a bypass (losing credit only makes a block last longer, which fails closed), but it
+   would have penalised an ordinary backward NTP correction. The implementation now trusts
+   monotonic outright when the wall delta is negative:
+
+   ```
+   advance = wallDelta < 0 ? monotonicDelta : min(wallDelta, monotonicDelta)
+   ```
+
+   The security invariant is unchanged and now unconditional: `advance <= monotonicDelta`.
+
+4. **`xunit` template instead of `xunit3`.** The `xunit3` template is not present in SDK
+   9.0.317.
+
+5. **Extra tests beyond the plan.** Added `ResumeWithoutTamperingCreditsOnlyTheGap`,
+   `AdvanceAfterResumeUsesTheFreshMonotonicBaseline` (regression guard for the monotonic
+   rebase after reboot), `EmptyStoredFieldsFailClosed`, and
+   `ExpiredPasswordLockedSessionNoLongerNeedsThePassword`. Added `localhost`, `*.`, and
+   `red*it.com` to the malformed-domain cases.
