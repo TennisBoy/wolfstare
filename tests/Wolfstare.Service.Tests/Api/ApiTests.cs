@@ -305,7 +305,18 @@ public sealed class WolfstareFactory : WebApplicationFactory<Program>, IDisposab
         Directory.CreateDirectory(_dataDirectory);
 
         builder.ConfigureHostConfiguration(config => config.AddInMemoryCollection(
-            new Dictionary<string, string?> { ["Wolfstare:DataDirectory"] = _dataDirectory }));
+            new Dictionary<string, string?>
+            {
+                ["Wolfstare:DataDirectory"] = _dataDirectory,
+
+                // Bind enforcement listeners to ephemeral ports so the test host never fights
+                // for 53/80/443 — those may be taken (as port 80 is on CI runners), which would
+                // degrade health and is unrelated to what these tests check.
+                ["Wolfstare:Enforcement:DnsPort"] = "0",
+                ["Wolfstare:Enforcement:ProxyPort"] = "0",
+                ["Wolfstare:Enforcement:TransparentHttpPort"] = "0",
+                ["Wolfstare:Enforcement:TransparentTlsPort"] = "0",
+            }));
 
         return base.CreateHost(builder);
     }
