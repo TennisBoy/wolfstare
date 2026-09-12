@@ -22,9 +22,9 @@ Close the deferred latency gap: blocking should take effect the instant a sessio
 
 **Files:** `src/Wolfstare.Service/Enforcement/IEnforcementRefresh.cs`, modify `WebsiteEnforcer` to implement it and `ApiEndpoints` to call it after start/stop/unlock; test `Enforcement/RefreshOnChangeTests.cs`.
 
-- [ ] `interface IEnforcementRefresh { Task RefreshNowAsync(CancellationToken ct); }` implemented by `WebsiteEnforcer` (delegates to `RefreshOnceAsync`); a `NullEnforcementRefresh` for when enforcement is absent in a test host.
-- [ ] Endpoints take `IEnforcementRefresh` and call it after a successful start, stop, or unlock.
-- [ ] Test: starting a session then reading the cache shows the rule without waiting; a fake refresh records it was called. Red, implement, green, commit.
+- [x] `interface IEnforcementRefresh { Task RefreshNowAsync(CancellationToken ct); }` implemented by `WebsiteEnforcer` (delegates to `RefreshOnceAsync`); a `NullEnforcementRefresh` for when enforcement is absent in a test host.
+- [x] Endpoints take `IEnforcementRefresh` and call it after a successful start, stop, or unlock.
+- [x] Test: starting a session then reading the cache shows the rule without waiting; a fake refresh records it was called. Red, implement, green, commit.
 
 ### Task 2: Session integrity (HMAC, fail-closed)
 
@@ -32,28 +32,28 @@ Spec §6: active lock state is HMAC-covered so a hand-edit of the database is de
 
 **Files:** `src/Wolfstare.Core/Sessions/SessionIntegrity.cs`, test `Sessions/SessionIntegrityTests.cs`.
 
-- [ ] `static class SessionIntegrity` with `string Sign(BlockSession, ReadOnlySpan<byte> key)` and `bool Verify(BlockSession, string mac, ReadOnlySpan<byte> key)`, HMAC-SHA256 over the fields that must not be forged (id, block list id, lock kind, duration, started-at), constant-time verify.
-- [ ] Test: a signature verifies; tampering with duration/lock/id fails; a different key fails; a garbage mac fails closed (false, no throw). Red, implement, green, commit.
-- [ ] Wire into the session repository: store the mac column, verify on load, and on mismatch keep the session active but mark health degraded (a later task can surface it). The DPAPI machine-key provider lives in the service layer and is not unit-tested.
+- [x] `static class SessionIntegrity` with `string Sign(BlockSession, ReadOnlySpan<byte> key)` and `bool Verify(BlockSession, string mac, ReadOnlySpan<byte> key)`, HMAC-SHA256 over the fields that must not be forged (id, block list id, lock kind, duration, started-at), constant-time verify.
+- [x] Test: a signature verifies; tampering with duration/lock/id fails; a different key fails; a garbage mac fails closed (false, no throw). Red, implement, green, commit.
+- [x] Wire into the session repository: store the mac column, verify on load, and on mismatch keep the session active but mark health degraded (a later task can surface it). The DPAPI machine-key provider lives in the service layer and is not unit-tested.
 
 ### Task 3: Windows Service hosting and lifecycle CLI
 
 **Files:** modify `Program.cs`; `src/Wolfstare.Service/ServiceControl/` for the SDDL transform and install/uninstall commands; `scripts/install.ps1`, `scripts/uninstall.ps1`; test `ServiceControl/ServiceSddlTests.cs`, `ServiceControl/UninstallGuardTests.cs`.
 
-- [ ] `Program.cs`: `AddWindowsService()`, and a `--console` switch (or absence of the service context) that runs interactively for dev. Args `install` / `uninstall` / `run` handled before building the web host.
-- [ ] Pure + tested: `ServiceSddl.DenyStopForInteractiveUser(existing)` transforms a service SDDL to remove `WP`/stop rights from the interactive user, and `AllowStop(existing)` restores it — string transform, unit-tested; applying it via `sc sdset` is scripted.
-- [ ] Pure + tested: `UninstallGuard.CanUninstall(activeSessions)` → false when any session is locked, with the reason. The uninstaller calls it.
-- [ ] `scripts/install.ps1`: install the service (`sc create` / `New-Service`), set failure actions to always-restart (`sc failure`), set `ModifySystem=true`, copy the stub next to the service exe. `uninstall.ps1`: refuse if a lock is active (query the API), else `sc delete`.
-- [ ] Red, implement, green, commit.
+- [x] `Program.cs`: `AddWindowsService()`, and a `--console` switch (or absence of the service context) that runs interactively for dev. Args `install` / `uninstall` / `run` handled before building the web host.
+- [x] Pure + tested: `ServiceSddl.DenyStopForInteractiveUser(existing)` transforms a service SDDL to remove `WP`/stop rights from the interactive user, and `AllowStop(existing)` restores it — string transform, unit-tested; applying it via `sc sdset` is scripted.
+- [x] Pure + tested: `UninstallGuard.CanUninstall(activeSessions)` → false when any session is locked, with the reason. The uninstaller calls it.
+- [x] `scripts/install.ps1`: install the service (`sc create` / `New-Service`), set failure actions to always-restart (`sc failure`), set `ModifySystem=true`, copy the stub next to the service exe. `uninstall.ps1`: refuse if a lock is active (query the API), else `sc delete`.
+- [x] Red, implement, green, commit.
 
 ### Task 4: React UI
 
 **Files:** `web/` (Vite + React + TS); serve from the service via static files with SPA fallback; `web/src/api/` typed client.
 
-- [ ] Scaffold Vite React-TS in `web/`. Dev server proxies `/api` to `http://127.0.0.1:8437`.
-- [ ] Screens: block-list list + editor (rules/allowlist), start-session dialog (duration, lock kind + password), active-status view with live countdown, unlock prompt. Reads the bearer token flow: in dev, a configured token; in production, the page is served same-origin by the service which injects it.
-- [ ] The service serves `web/dist` from `wwwroot` with a fallback to `index.html`; `/api` is unaffected.
-- [ ] `npm run build` succeeds; the SPA loads against the running service and can create a list, start a timed session, and see it refuse to stop. Commit.
+- [x] Scaffold Vite React-TS in `web/`. Dev server proxies `/api` to `http://127.0.0.1:8437`.
+- [x] Screens: block-list list + editor (rules/allowlist), start-session dialog (duration, lock kind + password), active-status view with live countdown, unlock prompt. Reads the bearer token flow: in dev, a configured token; in production, the page is served same-origin by the service which injects it.
+- [x] The service serves `web/dist` from `wwwroot` with a fallback to `index.html`; `/api` is unaffected.
+- [x] `npm run build` succeeds; the SPA loads against the running service and can create a list, start a timed session, and see it refuse to stop. Commit.
 
 ## Phase 5 Definition of Done
 
@@ -62,3 +62,35 @@ Spec §6: active lock state is HMAC-covered so a hand-edit of the database is de
 - `SessionIntegrity` detects a forged duration and fails closed on a garbage mac.
 - `ServiceSddl` and `UninstallGuard` are unit-tested; install/uninstall scripts exist and are checklisted.
 - The UI builds and drives the API end to end.
+
+---
+
+## Execution record
+
+Completed 2026-09-12. **309 tests passing** (144 Core, 97 Enforcement, 68 Service), plus the
+UI (`npm run build` green).
+
+Verified against the running service: the SPA is served with the API token injected into the
+meta tag (matching the token file), client-side routes fall back to index.html, and the `run`
+verb boots as a console app writing the integrity key.
+
+### Deviations
+
+1. **Integrity response is conservative.** Detection is full (tested), but on a bad MAC the
+   session is kept and health degraded rather than the session being forced unstoppable.
+   Refusing unlock on a tampered session was left out because a false positive — a regenerated
+   DPAPI key — would otherwise strand the user. Documented, not half-built.
+
+2. **Token injected into served index.html** rather than exposed via an endpoint, since the
+   token is anti-CSRF not anti-user: a cross-origin page can neither read the DOM nor pass the
+   Origin check.
+
+3. **Hand-scaffolded the Vite project** (package.json, config, sources written directly) instead
+   of `npm create vite`, for a deterministic, prompt-free setup.
+
+### Still open (documented, not blocking v1)
+
+- Refuse-unlock on a detected tamper (see deviation 1).
+- Real interactive-user SID for the proxy hive under `ModifySystem=true` (installer concern).
+- The manual E2E checklists (`docs/manual-e2e-phase*.md`) have not been run on live hardware
+  with `ModifySystem=true`; that is the next real-world step.

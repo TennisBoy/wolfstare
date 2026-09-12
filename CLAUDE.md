@@ -16,7 +16,8 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite (283 tests)
+dotnet test                                    # full suite (309 tests)
+cd web && npm run build                        # build the UI into the service's wwwroot
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace
 dotnet test tests/Wolfstare.Enforcement.Tests  # one project
@@ -128,6 +129,28 @@ one of those checks on the grounds that another covers it.
 Authenticode reading (`ProcessInspector`) sees only **embedded** signatures, not catalog ones.
 That's correct for the target: third-party apps embed their signatures; catalog-signed OS
 binaries are Microsoft-published and already barred from blocking.
+
+### Service, integrity, and the UI
+
+The service hosts under the SCM via `UseWindowsService()` and runs as a console app otherwise,
+so dev needs no install. `install`/`uninstall` are one-shot verbs handled before the host is
+built (`ServiceInstaller`); install sets always-restart failure actions. Tamper logic that is
+pure is tested — `ServiceSddl` (deny/allow the stop right) and `UninstallGuard` (refuse
+uninstall while locked); nothing tries to block an admin's `sc delete` or safe mode, which is
+an accepted limit, not a bug.
+
+`SessionIntegrity` (Core, tested) HMACs the fields of an active session that must not be forged
+— including elapsed, since forging it could force a timed lock to look expired. The key is
+DPAPI machine-scoped (`IntegrityKeyProvider`, service layer). On a mismatch the session is
+**kept** (dropping it would unblock) and health degraded; the stronger "refuse unlock on
+tamper" is deliberately not built, because a regenerated key would false-positive and strand
+the user.
+
+The UI is a Vite + React + TS SPA in `web/`, built into the service's `wwwroot` (gitignored;
+`install.ps1` builds it before publish). The service injects the API token into the served
+`index.html` — safe because the token is anti-CSRF, not anti-user (a cross-origin page can't
+read the DOM and fails the Origin check). Keep the `RuleDto`/`StatusDto` shapes in
+`web/src/api/types.ts` in step with `Wolfstare.Contracts` by hand.
 
 ### Two invariants worth understanding before editing
 

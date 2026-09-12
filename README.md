@@ -27,7 +27,7 @@ unusual: the adversary is the legitimate owner of the machine, later, in a weake
 
 ## Status
 
-In development, spec-first and test-driven. **283 tests passing.**
+Feature-complete for v1, spec-first and test-driven. **309 tests passing**, plus a React UI.
 
 | Phase | Scope | State |
 |---|---|---|
@@ -35,7 +35,12 @@ In development, spec-first and test-driven. **283 tests passing.**
 | 2 | Persistence, session manager, HTTP API | Done |
 | 3 | Website enforcement — DNS sinkhole, proxy, DoH sealing, reversible system changes | Done |
 | 4 | App enforcement — IFEO redirection, ETW watcher, block stub | Done |
-| 5 | Windows Service hosting, tamper resistance, React UI | Next |
+| 5 | Windows Service hosting, tamper resistance, session integrity, React UI | Done |
+
+Remaining before real-world use: run the `docs/manual-e2e-phase*.md` checklists on live
+hardware with `ModifySystem=true` — the privileged paths (DNS takeover, IFEO, process
+termination) are covered by their design and by the checklists, but have not been exercised
+end to end on a machine yet.
 
 The service runs today and blocks both websites and applications. Websites: a local DNS
 resolver sinkholes blocked domains (wildcards included) to a loopback proxy serving a block
@@ -59,11 +64,34 @@ for the design specification and `docs/superpowers/plans/` for the phase plans.
 - .NET 9 SDK
 - Node.js 20+
 
+## Install (real use)
+
+From an elevated PowerShell:
+
+```
+scripts\install.ps1     # builds the UI, publishes, registers the service with enforcement on
+scripts\uninstall.ps1   # refuses while a block is locked
+```
+
+The installed service runs at boot, restarts if killed, and turns on system enforcement
+(`ModifySystem=true`). Open the UI at http://127.0.0.1:8437/.
+
 ## Development
 
 ```
-dotnet run --project src/Wolfstare.Service    # API on http://127.0.0.1:8437
+dotnet run --project src/Wolfstare.Service    # API + UI on http://127.0.0.1:8437
+cd web && npm run dev                          # Vite dev server, proxies /api to the service
 dotnet test                                    # all tests
+```
+
+In development, enforcement runs on privileged ports (53/80/443) by default. To exercise it
+without admin, override the ports and leave `ModifySystem` off (the default) so the machine's
+DNS/proxy/registry are never touched:
+
+```
+dotnet run --project src/Wolfstare.Service -- \
+  --Wolfstare:Enforcement:DnsPort=15353 --Wolfstare:Enforcement:ProxyPort=18080 \
+  --Wolfstare:Enforcement:TransparentHttpPort=18081 --Wolfstare:Enforcement:TransparentTlsPort=14443
 ```
 
 The API requires a bearer token, written to `%ProgramData%\Wolfstare\api.token` on each start:
