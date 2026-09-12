@@ -36,6 +36,11 @@ public static class SchemaInitialiser
             );
 
             CREATE INDEX IF NOT EXISTS ix_sessions_block_list ON sessions (block_list_id);
+
+            CREATE TABLE IF NOT EXISTS mutation_journal (
+                key         TEXT PRIMARY KEY,
+                original    TEXT
+            );
             """;
 
         command.ExecuteNonQuery();
