@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <AssemblyName>Wolfstare.BlockStub</AssemblyName>
+    <!-- Deliberately no project or package references: the stub must launch even if
+         everything else on the machine is broken, so it depends on nothing but the framework. -->
+  </PropertyGroup>
+
+</Project>

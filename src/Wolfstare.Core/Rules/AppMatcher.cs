@@ -19,8 +19,12 @@ public sealed record ImageNameMatcher(string ImageName) : AppMatcher
         return wanted.Length != 0 && wanted.Equals(actual, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Strips any directory and normalises to a lowercase name ending in ".exe".</summary>
-    internal static string Canonical(string value)
+    /// <summary>
+    /// Strips any directory and normalises to a lowercase name ending in ".exe". Public because
+    /// the IFEO key builder must canonicalise names identically to the matcher — they have to
+    /// agree on what "the same executable" means.
+    /// </summary>
+    public static string Canonical(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
 
