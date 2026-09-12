@@ -16,13 +16,26 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite (152 tests)
+dotnet test                                    # full suite (247 tests)
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace
-dotnet test tests/Wolfstare.Service.Tests      # one project
+dotnet test tests/Wolfstare.Enforcement.Tests  # one project
 
 dotnet run --project src/Wolfstare.Service     # API on http://127.0.0.1:8437
 ```
+
+Enforcement runs on privileged ports (53/80/443) by default. To exercise it without admin,
+override the ports and keep `ModifySystem` off (the default):
+
+```
+dotnet run --project src/Wolfstare.Service -- \
+  --Wolfstare:Enforcement:DnsPort=15353 --Wolfstare:Enforcement:ProxyPort=18080 \
+  --Wolfstare:Enforcement:TransparentHttpPort=18081 --Wolfstare:Enforcement:TransparentTlsPort=14443
+```
+
+`ModifySystem=false` (default) means the sinkhole and proxy run but the machine's DNS, proxy,
+firewall, and browser policy are never touched — a run can never strand your networking. Only
+turn it on deliberately, elevated, following `docs/manual-e2e-phase3.md`.
 
 Set `DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1` to keep output readable.
 
@@ -62,15 +75,35 @@ taken away. Three consequences shape nearly every decision:
 
 ## Architecture
 
-### `Wolfstare.Core` must stay dependency-free
+### Project layout and the `net9.0` / `net9.0-windows` split
 
-Core targets `net9.0`, **not** `net9.0-windows`, and has zero `PackageReference` entries.
-This is load-bearing, not stylistic: the application otherwise needs SYSTEM privileges, a
-registered service, and a hijacked DNS resolver before you can observe any behaviour at all.
-Keeping the decision-making logic in a pure project means it runs in millisecond unit tests.
+- `Wolfstare.Core` (`net9.0`, **zero package references**) — all decision-making logic.
+- `Wolfstare.Contracts` (`net9.0`) — API DTOs.
+- `Wolfstare.Enforcement` (`net9.0-windows`) — DNS sinkhole, proxy, and the Windows
+  `ISystemSetting` adapters. Machine-configuration adapters live under `Machine/` (not
+  `System/` — a `System` namespace shadows the global one).
+- `Wolfstare.Service` (`net9.0-windows`) — host, API, SQLite, the `WebsiteEnforcer`.
 
-If you need a Windows API in Core, you have put the logic in the wrong project. Define an
-interface in Core and implement it in `Wolfstare.Enforcement`.
+A `net9.0` project cannot reference a `net9.0-windows` one, which is *why* Core stays portable:
+its logic runs in millisecond unit tests with no admin rights, no service, no hijacked
+resolver. If you reach for a Windows API in Core, the logic is in the wrong project — define an
+interface in Core and implement it in `Wolfstare.Enforcement`. `JournalledMutator` is the
+pattern to follow: pure orchestration in Core, the `ISystemSetting` adapters it drives in
+Enforcement. Pin new packages to the **9.x** line.
+
+### Enforcement reads a lock-free cache, never the database
+
+The DNS sinkhole evaluates rules on every lookup, so it reads `RuleSetCache` — a single
+`volatile` `RuleSet` reference the `WebsiteEnforcer` swaps in. Never make the servers query
+SQLite or take a lock on the hot path. `WebsiteEnforcer.RefreshOnceAsync` is the one place that
+copies session state into the cache and engages or disengages machine settings; it is the
+testable seam the tests drive directly instead of waiting on the timer.
+
+Machine changes are journalled and reversible (`ISystemMutator` / `JournalledMutator`): the
+original is recorded **before** the write, so a crash between the two restores harmlessly.
+`WindowsSystemEnforcement` builds one settings catalog that backs both apply and the restore
+resolver, so a journalled key always maps back to the setting that wrote it — don't split those
+two into separate lists that can drift.
 
 ### Two invariants worth understanding before editing
 

@@ -27,19 +27,25 @@ unusual: the adversary is the legitimate owner of the machine, later, in a weake
 
 ## Status
 
-In development, spec-first and test-driven. **152 tests passing.**
+In development, spec-first and test-driven. **247 tests passing.**
 
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Core domain — rules, locks, clock-tamper handling, stop policy | Done |
 | 2 | Persistence, session manager, HTTP API | Done |
-| 3 | Website enforcement — DNS sinkhole, proxy, DoH sealing | Next |
-| 4 | App enforcement — IFEO, ETW watcher, block stub | |
+| 3 | Website enforcement — DNS sinkhole, proxy, DoH sealing, reversible system changes | Done |
+| 4 | App enforcement — IFEO, ETW watcher, block stub | Next |
 | 5 | Windows Service hosting, tamper resistance, React UI | |
 
-The service runs today and answers the full REST surface: block lists persist, timed locks
-survive a process kill with downtime correctly credited, and a locked session returns `423`
-to every caller. Nothing is actually blocked yet — that is phase 3.
+The service runs today and blocks websites: with a session active, a local DNS resolver
+sinkholes blocked domains (wildcards included) to a loopback proxy that serves a block page,
+while everything else forwards normally. Block lists persist, timed locks survive a process
+kill with downtime correctly credited, and a locked session returns `423` to every caller.
+
+Machine configuration (DNS, proxy, firewall, browser DoH policy) is changed **only** when
+`Wolfstare:Enforcement:ModifySystem=true`; by default the servers run but the machine is left
+untouched, so the servers can be exercised on high ports with no admin rights. Application
+blocking (phase 4) is not built yet.
 
 See [`docs/superpowers/specs/2026-08-27-wolfstare-design.md`](docs/superpowers/specs/2026-08-27-wolfstare-design.md)
 for the design specification and `docs/superpowers/plans/` for the phase plans.

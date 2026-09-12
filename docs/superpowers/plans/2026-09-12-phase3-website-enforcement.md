@@ -32,8 +32,8 @@
 
 **Produces:** `sealed class RuleSetCache { RuleSet Current { get; } void Update(RuleSet); }` — thread-safe, lock-free read, starts as `RuleSet.Empty`.
 
-- [ ] Test: `Current` starts empty; `Update` is visible to subsequent reads; concurrent readers never observe null.
-- [ ] Implement with a `volatile` field. Commit.
+- [x] Test: `Current` starts empty; `Update` is visible to subsequent reads; concurrent readers never observe null.
+- [x] Implement with a `volatile` field. Commit.
 
 ### Task 2: DNS message codec
 
@@ -48,7 +48,7 @@
 
 Required test cases: parses a real query for `www.reddit.com` built byte-by-byte; rejects truncated input, a response (QR set), zero questions, a label pointer loop; A answer is 127.0.0.1 with TTL 10 and the query's ID and question echoed; AAAA answer is ::1; HTTPS (type 65) gets NOERROR with ANCOUNT 0; SERVFAIL sets RCODE 2; names are returned lowercase without trailing dot.
 
-- [ ] Red, implement, green, commit.
+- [x] Red, implement, green, commit.
 
 ### Task 3: DNS sinkhole server
 
@@ -60,7 +60,7 @@ Behaviour: UDP. Deny → sinkhole response. Permit → forward to upstreams in o
 
 Test cases against a fake upstream UDP server on an ephemeral port: blocked name gets 127.0.0.1 and the fake upstream sees nothing; allowed name is forwarded and the upstream's exact bytes returned; allowlisted subdomain of a blocked domain is forwarded; dead upstream yields SERVFAIL; `Blocked` fires with the name; updating the cache changes the next answer without restart.
 
-- [ ] Red, implement, green, commit.
+- [x] Red, implement, green, commit.
 
 ### Task 4: Block proxy
 
@@ -76,7 +76,7 @@ Transparent HTTP listener → always block page. Transparent TLS listener → al
 
 Test cases with a fake origin TCP server: `CONNECT` to allowed host tunnels bytes both directions; `CONNECT` to blocked host gets 403 and origin never sees a connection; absolute-form GET to allowed host arrives at origin in origin-form with `Connection: close`; blocked GET gets the HTML block page naming the host (HTML-encoded); transparent HTTP listener blocks even a host the rules permit; transparent TLS listener closes without writing; oversized head gets 400.
 
-- [ ] Red, implement, green, commit.
+- [x] Red, implement, green, commit.
 
 ### Task 5: Journalled system mutation
 
@@ -91,7 +91,7 @@ Semantics: first `ApplyAsync` for a key reads and journals the original **before
 
 Test cases with a fake in-memory setting: original journalled before write (a throwing write leaves the journal entry); second apply keeps the first original; restore writes originals and clears the journal; null original (setting absent) restores to absent; restore after a simulated crash restores; SQLite journal round-trips including null.
 
-- [ ] Red, implement, green, commit.
+- [x] Red, implement, green, commit.
 
 ### Task 6: Windows adapters
 
@@ -106,7 +106,7 @@ Each is an `ISystemSetting`. They run external commands (`netsh`) or registry wr
 - `BrowserDohPolicies` — factory for the Chrome, Edge, and Firefox policy `RegistryValueSetting`s.
 - Manual E2E checklist covering apply, verify with `nslookup`/`netsh`/`reg query`, restore, and crash-restore.
 
-- [ ] Test pure helpers red/green. Implement adapters. Write checklist. Commit.
+- [x] Test pure helpers red/green. Implement adapters. Write checklist. Commit.
 
 ### Task 7: `WebsiteEnforcer` hosted service
 
@@ -121,7 +121,7 @@ Behaviour:
 
 Test cases (with `ModifySystem=false`, ephemeral ports): starting a session makes the sinkhole block that domain within one refresh; stopping it unblocks; a port that cannot be bound yields `Degraded` in `/api/status` while the API keeps serving; with a fake mutator and `ModifySystem=true`, a domain session applies settings and ending it restores them.
 
-- [ ] Red, implement, green, full suite, smoke test against the running service with `nslookup` pointed at the sinkhole port, commit, push.
+- [x] Red, implement, green, full suite, smoke test against the running service with `nslookup` pointed at the sinkhole port, commit, push.
 
 ## Phase 3 Definition of Done
 
@@ -129,3 +129,52 @@ Test cases (with `ModifySystem=false`, ephemeral ports): starting a session make
 - With `ModifySystem=false`, a running service blocks `reddit.com` when queried directly (`nslookup reddit.com 127.0.0.1 -port=<port>` style check) and forwards `example.com`.
 - No automated step modifies the development machine's network configuration.
 - `docs/manual-e2e-phase3.md` exists for the privileged path.
+
+---
+
+## Execution record
+
+Completed 2026-09-12. **247 tests passing** (134 Core, 68 Enforcement, 45 Service).
+
+Verified against the running service with `ModifySystem=false` on a high DNS port (no admin):
+`reddit.com` and `www.reddit.com` sinkhole to `127.0.0.1`, `example.com` forwards to its real
+address. A deliberate port collision surfaced correctly as `degraded` health on `/api/status`.
+
+### Deviations
+
+1. **`System` namespace became `Machine`.** A test namespace ending in `.System` shadowed the
+   global `System`, breaking `System.Text` in a sibling file. `Wolfstare.Enforcement.Machine`
+   avoids the collision class entirely and reads better.
+
+2. **`RestoreReport` is richer than the plan's `RestoreAllAsync` sketch.** It distinguishes
+   restored / failed / unresolved keys so a removed network adapter (unresolved) and a failed
+   write (retry) are handled differently, and both keep their journal entry rather than
+   stranding the machine.
+
+3. **`JournalledMutator` lives in Core, not Enforcement.** It is pure orchestration over Core
+   interfaces, so it belongs where it can be unit-tested without the Windows TFM. It carries no
+   logger (Core forbids package refs); abnormal outcomes surface through `RestoreReport`, logged
+   by the Windows-layer caller.
+
+4. **`WindowsSystemEnforcement` owns its mutator and a single settings catalog.** The catalog
+   backs both apply and the restore resolver, so the resolver can never disagree with the
+   applier about a key's shape. An initial DI stub wired `key => null` as the resolver, which
+   would have made every restore a silent no-op — caught before commit.
+
+5. **Firewall egress uses `netsh advfirewall`, not raw WFP**, as the spec's §7.2 note already
+   anticipated: port-based denial needs a fraction of the P/Invoke surface and the rules are
+   inspectable with `netsh`.
+
+6. **`Service` tests keep local test doubles** (`TestDoubles.cs`) rather than referencing
+   `Core.Tests`, so the two test assemblies stay independent across their different TFMs.
+
+### Not yet done from the plan
+
+- **Immediate refresh after a start/stop API call.** Blocking currently takes effect on the
+  next 2-second tick rather than instantly. Correct, just up to 2s of latency; a nicety for
+  later.
+- **Upstream capture before takeover** is stubbed to the configured fallback resolvers. The
+  real capture (reading current resolvers before pointing interfaces at ourselves) belongs with
+  the privileged `ModifySystem=true` path and its manual E2E pass.
+- **HTTPS inspection** remains the documented seam (`NullCertificateProvider`); path rules stay
+  rejected at validation, as designed for v1.
