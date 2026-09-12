@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Wolfstare.Core\Wolfstare.Core.csproj" />
     <ProjectReference Include="..\Wolfstare.Contracts\Wolfstare.Contracts.csproj" />
+    <ProjectReference Include="..\Wolfstare.Enforcement\Wolfstare.Enforcement.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -10,7 +11,7 @@
   </ItemGroup>
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
