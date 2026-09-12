@@ -32,7 +32,8 @@ public static class SchemaInitialiser
                 elapsed_seconds         INTEGER NOT NULL,
                 checkpoint_wall_utc     TEXT NOT NULL,
                 checkpoint_monotonic_ms INTEGER NOT NULL,
-                duration_seconds        INTEGER
+                duration_seconds        INTEGER,
+                integrity_mac           TEXT
             );
 
             CREATE INDEX IF NOT EXISTS ix_sessions_block_list ON sessions (block_list_id);

@@ -13,7 +13,15 @@ namespace Wolfstare.Service.Storage;
 /// than as a serialised object: elapsed time is the only input to expiry, so a lossy round
 /// trip would silently shorten or lengthen every lock across a restart.
 /// </summary>
-public sealed class SqliteSessionRepository(SqliteConnectionFactory factory) : ISessionRepository
+/// <param name="integrityKey">
+/// Optional key that signs and verifies each session's integrity MAC (spec §6). When supplied,
+/// a row whose MAC does not match is kept — dropping it would unblock, the wrong way to fail —
+/// and <paramref name="onIntegrityFailure"/> is invoked so health can be marked degraded.
+/// </param>
+public sealed class SqliteSessionRepository(
+    SqliteConnectionFactory factory,
+    byte[]? integrityKey = null,
+    Action<Guid>? onIntegrityFailure = null) : ISessionRepository
 {
     private const string LockNone = "none";
     private const string LockPassword = "password";
@@ -27,15 +35,31 @@ public sealed class SqliteSessionRepository(SqliteConnectionFactory factory) : I
             """
             SELECT id, block_list_id, lock_kind, lock_hash, lock_salt, lock_iterations,
                    started_at_utc, elapsed_seconds, checkpoint_wall_utc,
-                   checkpoint_monotonic_ms, duration_seconds
+                   checkpoint_monotonic_ms, duration_seconds, integrity_mac
             FROM sessions;
             """;
 
         var results = new List<BlockSession>();
         await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) results.Add(Read(reader));
+        while (await reader.ReadAsync(ct))
+        {
+            var session = Read(reader);
+            VerifyIntegrity(session, reader.IsDBNull(11) ? null : reader.GetString(11));
+            results.Add(session);
+        }
 
         return results;
+    }
+
+    private void VerifyIntegrity(BlockSession session, string? mac)
+    {
+        if (integrityKey is null) return;
+
+        // A missing or non-matching MAC means the row was written without integrity (an older
+        // record) or edited by hand. Either way, flag it — the session is kept, so the block
+        // persists rather than failing open.
+        if (mac is null || !SessionIntegrity.Verify(session, mac, integrityKey))
+            onIntegrityFailure?.Invoke(session.Id);
     }
 
     public async Task SaveAsync(BlockSession session, CancellationToken ct = default)
@@ -47,14 +71,15 @@ public sealed class SqliteSessionRepository(SqliteConnectionFactory factory) : I
             INSERT INTO sessions (
                 id, block_list_id, lock_kind, lock_hash, lock_salt, lock_iterations,
                 started_at_utc, elapsed_seconds, checkpoint_wall_utc,
-                checkpoint_monotonic_ms, duration_seconds)
+                checkpoint_monotonic_ms, duration_seconds, integrity_mac)
             VALUES (
                 $id, $blockListId, $lockKind, $lockHash, $lockSalt, $lockIterations,
-                $startedAt, $elapsed, $checkpointWall, $checkpointMonotonic, $duration)
+                $startedAt, $elapsed, $checkpointWall, $checkpointMonotonic, $duration, $mac)
             ON CONFLICT(id) DO UPDATE SET
                 elapsed_seconds = excluded.elapsed_seconds,
                 checkpoint_wall_utc = excluded.checkpoint_wall_utc,
-                checkpoint_monotonic_ms = excluded.checkpoint_monotonic_ms;
+                checkpoint_monotonic_ms = excluded.checkpoint_monotonic_ms,
+                integrity_mac = excluded.integrity_mac;
             """;
 
         command.Parameters.AddWithValue("$id", session.Id.ToString());
@@ -71,6 +96,9 @@ public sealed class SqliteSessionRepository(SqliteConnectionFactory factory) : I
         command.Parameters.AddWithValue("$checkpointWall", Format(session.Timing.CheckpointWallUtc));
         command.Parameters.AddWithValue("$checkpointMonotonic", session.Timing.CheckpointMonotonicMs);
         command.Parameters.AddWithValue("$duration", (object?)session.DurationSeconds ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "$mac",
+            integrityKey is null ? DBNull.Value : SessionIntegrity.Sign(session, integrityKey));
 
         await command.ExecuteNonQueryAsync(ct);
     }
