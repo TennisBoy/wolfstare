@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Wolfstare.Core.Sessions;
 using Wolfstare.Core.Storage;
 using Wolfstare.Core.Time;
@@ -6,9 +7,19 @@ using Wolfstare.Enforcement.Machine;
 using Wolfstare.Service;
 using Wolfstare.Service.Api;
 using Wolfstare.Service.Enforcement;
+using Wolfstare.Service.ServiceControl;
 using Wolfstare.Service.Storage;
 
+// `install` / `uninstall` are handled before any host is built — they are one-shot admin
+// commands, not the running service. Everything else ("run", or no verb) starts the service.
+if (args is [var verb, ..] && verb is "install" or "uninstall")
+    return ServiceInstaller.Run(verb, args);
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Runs as a Windows Service when launched by the SCM, and as a plain console app otherwise —
+// so `dotnet run` needs no service install for development (spec §12).
+builder.Host.UseWindowsService(options => options.ServiceName = "Wolfstare");
 
 var paths = WolfstarePaths.Resolve(builder.Configuration);
 var token = ApiToken.CreateAndPersist(paths);
@@ -16,8 +27,19 @@ var token = ApiToken.CreateAndPersist(paths);
 builder.WebHost.UseUrls($"http://127.0.0.1:{paths.Port}");
 
 builder.Services.AddSingleton(new SqliteConnectionFactory(paths.DatabasePath));
+builder.Services.AddSingleton(new IntegrityKeyProvider(paths));
 builder.Services.AddSingleton<IBlockListRepository, SqliteBlockListRepository>();
-builder.Services.AddSingleton<ISessionRepository, SqliteSessionRepository>();
+builder.Services.AddSingleton<ISessionRepository>(sp => new SqliteSessionRepository(
+    sp.GetRequiredService<SqliteConnectionFactory>(),
+    sp.GetRequiredService<IntegrityKeyProvider>().Key,
+    tamperedId =>
+    {
+        sp.GetRequiredService<EnforcementHealth>().Degrade(
+            $"Session {tamperedId} failed its integrity check; the database may have been edited. "
+            + "Blocks remain in force.");
+        sp.GetRequiredService<ILogger<Program>>().LogWarning(
+            "Integrity check failed for session {SessionId}; keeping it active (fail closed).", tamperedId);
+    }));
 builder.Services.AddSingleton<IMutationJournal, SqliteMutationJournal>();
 builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 builder.Services.AddSingleton<IClock, SystemClock>();
@@ -48,6 +70,7 @@ app.Logger.LogInformation("Wolfstare API listening on http://127.0.0.1:{Port}", 
 app.Logger.LogInformation("API token written to {TokenPath}", paths.TokenPath);
 
 app.Run();
+return 0;
 
 /// <summary>Exposed so the test host can reference this assembly's entry point.</summary>
 public partial class Program;
