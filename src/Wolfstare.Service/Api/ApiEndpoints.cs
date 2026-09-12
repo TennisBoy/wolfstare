@@ -34,7 +34,10 @@ public static class ApiEndpoints
     }
 
     private static async Task<IResult> GetStatus(
-        SessionManager manager, IBlockListRepository lists, CancellationToken ct)
+        SessionManager manager,
+        IBlockListRepository lists,
+        Wolfstare.Service.Enforcement.EnforcementHealth health,
+        CancellationToken ct)
     {
         var active = await manager.GetActiveAsync(ct);
         var dtos = new List<ActiveSessionDto>(active.Count);
@@ -53,7 +56,11 @@ public static class ApiEndpoints
                 CanBeStopped: session.Lock is NoLock || session.IsExpired()));
         }
 
-        return Results.Ok(new StatusDto(dtos, "ok"));
+        // Health reflects the enforcement subsystems: "ok", or "degraded" with a reason the UI
+        // can show — a degraded blocker is still blocking, but less completely than the user
+        // may assume, so it must be surfaced rather than hidden.
+        var status = health.Status == Wolfstare.Service.Enforcement.EnforcementStatus.Ok ? "ok" : "degraded";
+        return Results.Ok(new StatusDto(dtos, status));
     }
 
     private static async Task<IResult> GetBlockLists(IBlockListRepository lists, CancellationToken ct)
