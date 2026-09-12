@@ -34,6 +34,7 @@ builder.Services.AddSingleton(sp => EnforcementFactory.CreateSystem(sp, paths));
 builder.Services.AddSingleton(sp => EnforcementFactory.CreateApp(sp, paths));
 builder.Services.AddSingleton(sp => EnforcementFactory.CreateWatcher(sp));
 builder.Services.AddSingleton<WebsiteEnforcer>();
+builder.Services.AddSingleton<IEnforcementRefresh>(sp => sp.GetRequiredService<WebsiteEnforcer>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WebsiteEnforcer>());
 
 var app = builder.Build();

@@ -119,6 +119,7 @@ public static class ApiEndpoints
         StartSessionRequest request,
         SessionManager manager,
         IPasswordHasher hasher,
+        Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
         CancellationToken ct)
     {
         SessionLock sessionLock;
@@ -149,6 +150,9 @@ public static class ApiEndpoints
 
         var result = await manager.StartAsync(new SessionStartRequest(id, duration, sessionLock), ct);
 
+        if (result.Failure == StartFailure.None)
+            await refresh.RefreshNowAsync(ct);
+
         return result.Failure switch
         {
             StartFailure.None => Results.Ok(),
@@ -162,14 +166,27 @@ public static class ApiEndpoints
     }
 
     private static async Task<IResult> StopSession(
-        Guid id, StopSessionRequest? request, SessionManager manager, CancellationToken ct)
-        => Translate(await manager.StopAsync(id, request?.Password, ct), await Remaining(id, manager, ct));
+        Guid id,
+        StopSessionRequest? request,
+        SessionManager manager,
+        Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
+        CancellationToken ct)
+    {
+        var outcome = await manager.StopAsync(id, request?.Password, ct);
+        if (outcome == StopOutcome.Allowed) await refresh.RefreshNowAsync(ct);
+        return Translate(outcome, await Remaining(id, manager, ct));
+    }
 
     private static async Task<IResult> Unlock(
-        UnlockRequest request, SessionManager manager, CancellationToken ct)
-        => Translate(
-            await manager.StopAsync(request.BlockListId, request.Password, ct),
-            await Remaining(request.BlockListId, manager, ct));
+        UnlockRequest request,
+        SessionManager manager,
+        Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
+        CancellationToken ct)
+    {
+        var outcome = await manager.StopAsync(request.BlockListId, request.Password, ct);
+        if (outcome == StopOutcome.Allowed) await refresh.RefreshNowAsync(ct);
+        return Translate(outcome, await Remaining(request.BlockListId, manager, ct));
+    }
 
     /// <summary>
     /// Maps a <see cref="StopOutcome"/> onto its HTTP status. 423 for a lock the caller cannot

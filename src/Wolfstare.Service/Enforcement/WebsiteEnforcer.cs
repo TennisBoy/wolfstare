@@ -22,7 +22,7 @@ namespace Wolfstare.Service.Enforcement;
 /// when website enforcement first engages and restored once when it disengages, not on every
 /// tick.
 /// </summary>
-public sealed class WebsiteEnforcer : BackgroundService
+public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
 {
     private readonly SessionManager _manager;
     private readonly RuleSetCache _cache;
@@ -122,6 +122,9 @@ public sealed class WebsiteEnforcer : BackgroundService
 
         await StopServersAsync();
     }
+
+    /// <summary>The immediate-refresh hook (spec: no perceptible latency on a session change).</summary>
+    public Task RefreshNowAsync(CancellationToken ct) => RefreshOnceAsync(ct);
 
     /// <summary>
     /// Reconciles enforcement with the current sessions: refreshes the cache the servers read,
