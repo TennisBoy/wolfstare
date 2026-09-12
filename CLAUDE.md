@@ -16,7 +16,7 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite (247 tests)
+dotnet test                                    # full suite (283 tests)
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace
 dotnet test tests/Wolfstare.Enforcement.Tests  # one project
@@ -101,9 +101,33 @@ testable seam the tests drive directly instead of waiting on the timer.
 
 Machine changes are journalled and reversible (`ISystemMutator` / `JournalledMutator`): the
 original is recorded **before** the write, so a crash between the two restores harmlessly.
-`WindowsSystemEnforcement` builds one settings catalog that backs both apply and the restore
-resolver, so a journalled key always maps back to the setting that wrote it — don't split those
-two into separate lists that can drift.
+`SystemSettingResolver` reconstructs any setting from its journal key, so restore works after a
+crash with no memory of having applied it — when you add a new `ISystemSetting` type, teach the
+resolver its key prefix or its keys will never restore.
+
+### Website and app enforcement share one journal but engage independently
+
+Website takeover (DNS/proxy/firewall/DoH) engages only when a session has a **domain** rule;
+IFEO redirection engages only on an **image-name** rule. So the coordinator tracks two
+engagement bits, and restore is **key-scoped** (`RestoreMatchingAsync`): website restore touches
+everything but `ifeo:`, app restore touches only `ifeo:`. A blunt `RestoreAllAsync` when one
+half disengages would rip out the other's live settings — don't reach for it outside startup
+crash-recovery.
+
+### App enforcement: IFEO catches by name, ETW catches renames
+
+`ImageNameMatcher` rules become IFEO `Debugger` redirections to the block stub — keyed on the
+filename, so the key can exist before the app is installed (the not-yet-installed requirement).
+Renaming the exe defeats IFEO, so the `ProcessWatcher` (ETW, `ProcessStartDecision`) is the
+backstop: it matches on publisher/description, which a rename doesn't change. The
+critical-process guard is enforced in **three** places on purpose — `RuleValidator` at creation,
+the IFEO setting's constructor, and `ProcessStartDecision` at the kill boundary — because an
+IFEO key or a kill on `explorer.exe`/`lsass.exe` can make the machine unbootable. Never remove
+one of those checks on the grounds that another covers it.
+
+Authenticode reading (`ProcessInspector`) sees only **embedded** signatures, not catalog ones.
+That's correct for the target: third-party apps embed their signatures; catalog-signed OS
+binaries are Microsoft-published and already barred from blocking.
 
 ### Two invariants worth understanding before editing
 

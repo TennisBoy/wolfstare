@@ -32,7 +32,7 @@
 
 Pure helper to test: the IFEO subkey path builder (`IfeoPaths.For(imageName)` → native + Wow64 paths), and that constructing for a protected name throws. These need no registry.
 
-- [ ] Test the path builder and the protected-name guard (both pure). Red, implement, green, commit.
+- [x] Test the path builder and the protected-name guard (both pure). Red, implement, green, commit.
 
 ### Task 2: Block stub executable
 
@@ -42,7 +42,7 @@ The exe Windows launches in place of a blocked app. IFEO passes it the original 
 
 Pure helper to test (in `Wolfstare.Enforcement.Tests`, referencing the stub or a copied helper): `BlockStubMessage.ForCommandLine(string[] args)` → the human-readable exe name pulled from the IFEO-supplied argv. IFEO passes `<stub> <originalExePath> <originalArgs...>`, so argv[0] here is the blocked exe path.
 
-- [ ] Test the message/arg parsing helper. Red, implement, green. Build the exe (`dotnet build`) and confirm it produces a WinExe. Commit.
+- [x] Test the message/arg parsing helper. Red, implement, green. Build the exe (`dotnet build`) and confirm it produces a WinExe. Commit.
 
 ### Task 3: Process identity resolution
 
@@ -54,7 +54,7 @@ Pure helper to test (in `Wolfstare.Enforcement.Tests`, referencing the stub or a
 
 Testable without ETW: run against real on-disk executables. `notepad.exe` under System32 has a Microsoft publisher and a file description; a temp file with a random name has neither. The mapping from an image path to a `ProcessIdentity` is pure given the file.
 
-- [ ] Test identity resolution against `%WINDIR%\System32\notepad.exe` (has publisher + description) and a throwaway unsigned file (both null). Red, implement, green, commit.
+- [x] Test identity resolution against `%WINDIR%\System32\notepad.exe` (has publisher + description) and a throwaway unsigned file (both null). Red, implement, green, commit.
 
 ### Task 4: App enforcement engagement
 
@@ -67,7 +67,7 @@ Testable without ETW: run against real on-disk executables. `notepad.exe` under 
 
 Test with a fake mutator: a session with an `ImageNameMatcher("steam.exe")` applies one IFEO setting; a `PublisherMatcher` applies none (watcher-only); an `ImageNameMatcher` for a critical process applies none and logs; ending the session restores.
 
-- [ ] Red, implement, green, commit.
+- [x] Red, implement, green, commit.
 
 ### Task 5: ETW process watcher
 
@@ -79,7 +79,7 @@ Test with a fake mutator: a session with an `ImageNameMatcher("steam.exe")` appl
 
 The ETW subscription itself is not unit-tested (it needs a live session and admin). The **decision core is**: extract `ProcessStartDecision.ShouldTerminate(RuleSet, ProcessIdentity)` → bool, which folds in the critical-process guard, and test it exhaustively with a fake terminator and synthetic identities. `ProcessWatcher`'s event handler calls that method, so the tested logic is the logic that runs.
 
-- [ ] Test `ShouldTerminate`: blocked image name → true; blocked publisher (renamed exe) → true; critical process even if "blocked" → false; permitted → false; allowlisted → false. Test that `ProcessWatcher`, fed a synthetic start event through an injected seam, terminates a match and raises `Terminated`, and never terminates a critical process. Red, implement, green, commit.
+- [x] Test `ShouldTerminate`: blocked image name → true; blocked publisher (renamed exe) → true; critical process even if "blocked" → false; permitted → false; allowlisted → false. Test that `ProcessWatcher`, fed a synthetic start event through an injected seam, terminates a match and raises `Terminated`, and never terminates a critical process. Red, implement, green, commit.
 
 ### Task 6: Wire into the service
 
@@ -90,7 +90,7 @@ The ETW subscription itself is not unit-tested (it needs a live session and admi
 - The stub path resolves next to the service exe.
 - Extend `docs/manual-e2e-phase4.md`: install an IFEO rule for a test app (e.g. a copied `calc` renamed), launch it, confirm the stub appears; rename the exe and confirm the ETW watcher still kills it by publisher; confirm restore removes the IFEO keys; confirm `explorer.exe` can never be added.
 
-- [ ] Red where testable, implement, green, full suite, commit, push. Manual E2E documented (privileged path).
+- [x] Red where testable, implement, green, full suite, commit, push. Manual E2E documented (privileged path).
 
 ## Phase 4 Definition of Done
 
@@ -99,3 +99,48 @@ The ETW subscription itself is not unit-tested (it needs a live session and admi
 - `ProcessStartDecision.ShouldTerminate` returns true for a blocked publisher on a renamed image and false for any critical process.
 - No automated step writes HKLM IFEO keys or terminates a real process.
 - `docs/manual-e2e-phase4.md` covers the privileged path, including the not-yet-installed case and the rename case.
+
+---
+
+## Execution record
+
+Completed 2026-09-12. **283 tests passing** (134 Core, 97 Enforcement, 52 Service).
+
+Verified against the running service (`ModifySystem=false`): a mixed app+domain session starts
+and reports healthy, and an `explorer.exe` rule is rejected at the API with the guard's message.
+The privileged IFEO/ETW/terminate paths are covered by `docs/manual-e2e-phase4.md`.
+
+### Deviations
+
+1. **`RestoreMatchingAsync` added to `ISystemMutator`.** Website and app enforcement share one
+   journal but engage independently — a session may block only apps or only sites — so a full
+   `RestoreAllAsync` would rip out the other half's settings when one disengages. The scoped
+   restore (by key prefix) is the fix; `RestoreAllAsync` is now it with a match-everything filter.
+
+2. **`WindowsSystemEnforcement` no longer owns its mutator.** Phase 3 had it build a private
+   mutator whose resolver only knew website settings. With a shared journal now also holding
+   `ifeo:` keys, that resolver would leave IFEO keys unresolved forever. Restore reconstruction
+   moved to `SystemSettingResolver`, which covers every setting type; each enforcer holds its
+   own (stateless) `JournalledMutator` over the one journal.
+
+3. **`ImageNameMatcher.Canonical` made public.** The IFEO key builder must canonicalise names
+   identically to the matcher — they have to agree on what "the same executable" is.
+
+4. **`ProcessInspector` uses `X509Certificate.CreateFromSignedFile` with SYSLIB0057 suppressed.**
+   Its suggested replacement reads certificate files, not embedded Authenticode signatures. Only
+   embedded signatures are read (not catalog), which is right for the third-party apps we block;
+   catalog-signed OS binaries are Microsoft-published and already barred.
+
+5. **The block stub duplicates its message logic** rather than referencing `BlockStubMessage`,
+   to stay dependency-free — a stub that failed to launch for a missing dependency would let a
+   blocked app through. `BlockStubMessage` is the tested reference copy.
+
+6. **The process watcher is always constructed, started only under `ModifySystem`.** Avoids a
+   nullable DI registration; construction is cheap and only `Start()` is privileged.
+
+### Not yet done
+
+- **Immediate refresh after a start/stop** (shared with phase 3) — IFEO keys appear on the next
+  2s tick, not instantly.
+- The **interactive-user SID** for the proxy hive is still best-effort (`ModifySystem=true`
+  installer concern, phase 5).
