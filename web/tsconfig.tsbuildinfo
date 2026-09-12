@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/format.ts","./src/main.tsx","./src/vite-env.d.ts","./src/api/client.ts","./src/api/types.ts","./src/components/blocklisteditor.tsx","./src/components/startdialog.tsx","./src/components/unlockdialog.tsx"],"version":"5.9.3"}

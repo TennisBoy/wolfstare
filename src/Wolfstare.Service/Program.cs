@@ -66,6 +66,12 @@ SchemaInitialiser.Initialise(app.Services.GetRequiredService<SqliteConnectionFac
 app.UseMiddleware<LocalApiGuard>();
 app.MapWolfstareApi();
 
+// Serve the built SPA from wwwroot, if present. index.html is served with the API token
+// injected, so the same-origin page can call the API; a cross-origin page still can't, because
+// it cannot read this page's DOM and the LocalApiGuard rejects its Origin.
+app.UseStaticFiles();
+app.MapWolfstareSpa(token);
+
 app.Logger.LogInformation("Wolfstare API listening on http://127.0.0.1:{Port}", paths.Port);
 app.Logger.LogInformation("API token written to {TokenPath}", paths.TokenPath);
 

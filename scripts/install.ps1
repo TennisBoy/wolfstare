@@ -21,6 +21,15 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $installDir = Join-Path $env:ProgramData "Wolfstare\bin"
 
+Write-Host "Building the UI..."
+Push-Location (Join-Path $repoRoot "web")
+try {
+    npm install
+    npm run build   # emits into src\Wolfstare.Service\wwwroot, which publish then copies
+} finally {
+    Pop-Location
+}
+
 Write-Host "Publishing Wolfstare ($Configuration)..."
 dotnet publish (Join-Path $repoRoot "src\Wolfstare.Service") -c $Configuration -o $installDir
 dotnet publish (Join-Path $repoRoot "src\Wolfstare.BlockStub") -c $Configuration -o $installDir

@@ -1,0 +1,111 @@
+:root {
+  color-scheme: dark;
+  --bg: #14161a;
+  --panel: #1c2027;
+  --border: #2b313b;
+  --text: #d7dbe0;
+  --muted: #8b93a1;
+  --accent: #e0894a;
+  --danger: #e05a5a;
+  --ok: #57b06f;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+header.app-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+header.app-header h1 { font-size: 1.3rem; margin: 0; }
+header.app-header h1 span { color: var(--accent); }
+
+.health { font-size: 0.85rem; }
+.health.ok { color: var(--ok); }
+.health.degraded { color: var(--danger); }
+
+section { margin-bottom: 28px; }
+h2 { font-size: 1rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.row-wrap { flex-wrap: wrap; }
+
+.name { font-weight: 600; }
+.meta { color: var(--muted); font-size: 0.85rem; }
+
+.countdown { font-variant-numeric: tabular-nums; font-size: 1.1rem; color: var(--accent); }
+.locked-badge { color: var(--danger); font-size: 0.8rem; border: 1px solid var(--danger); border-radius: 4px; padding: 1px 6px; }
+
+button {
+  font: inherit;
+  background: #262b33;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #14161a; border-color: var(--accent); font-weight: 600; }
+button.danger:hover { border-color: var(--danger); color: var(--danger); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+input, select {
+  font: inherit;
+  background: #10131a;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+input:focus, select:focus { outline: 1px solid var(--accent); }
+
+label { display: block; font-size: 0.85rem; color: var(--muted); margin: 8px 0 3px; }
+
+.rule-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #10131a; border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 8px; font-size: 0.85rem; margin: 3px 4px 3px 0;
+}
+.rule-chip .kind { color: var(--muted); }
+.rule-chip button { padding: 0 4px; background: none; border: none; color: var(--muted); }
+.rule-chip button:hover { color: var(--danger); }
+
+.error { color: var(--danger); font-size: 0.85rem; margin-top: 8px; }
+
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+  display: grid; place-items: center; padding: 16px;
+}
+.dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; width: min(28rem, 100%); }
+.dialog h3 { margin-top: 0; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.empty { color: var(--muted); font-style: italic; }
+.add-rule { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
