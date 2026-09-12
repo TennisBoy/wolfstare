@@ -33,6 +33,15 @@ public interface ISystemMutator
 
     /// <summary>Writes every journalled original back and forgets the ones that restored.</summary>
     Task<RestoreReport> RestoreAllAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Restores only the journalled settings whose key matches <paramref name="keyFilter"/>.
+    ///
+    /// Website and app enforcement share one journal but engage independently — a session may
+    /// block only apps, or only sites — so each must be able to put its own settings back
+    /// without disturbing the other's. A full restore is this with a match-everything filter.
+    /// </summary>
+    Task<RestoreReport> RestoreMatchingAsync(Func<string, bool> keyFilter, CancellationToken ct);
 }
 
 /// <summary>The outcome of a restore pass. Entries that did not restore are kept for retry.</summary>

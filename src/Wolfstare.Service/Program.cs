@@ -25,12 +25,14 @@ builder.Services.AddSingleton<SessionManager>();
 builder.Services.AddSingleton(new LocalApiGuard(token));
 builder.Services.AddHostedService<SessionTicker>();
 
-// Website enforcement (spec §7).
+// Enforcement (spec §7 website, §8 apps).
 builder.Services.Configure<EnforcementOptions>(builder.Configuration.GetSection(EnforcementOptions.Section));
 builder.Services.AddSingleton<RuleSetCache>();
 builder.Services.AddSingleton<EnforcementHealth>();
 builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
-builder.Services.AddSingleton(sp => SystemEnforcementFactory.Create(sp, paths));
+builder.Services.AddSingleton(sp => EnforcementFactory.CreateSystem(sp, paths));
+builder.Services.AddSingleton(sp => EnforcementFactory.CreateApp(sp, paths));
+builder.Services.AddSingleton(sp => EnforcementFactory.CreateWatcher(sp));
 builder.Services.AddSingleton<WebsiteEnforcer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WebsiteEnforcer>());
 

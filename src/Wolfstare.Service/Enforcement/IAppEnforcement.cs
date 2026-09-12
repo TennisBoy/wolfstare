@@ -57,7 +57,9 @@ public sealed class WindowsAppEnforcement(
         }
     }
 
-    public Task RestoreAsync(CancellationToken ct) => mutator.RestoreAllAsync(ct);
+    public Task RestoreAsync(CancellationToken ct)
+        // Only the IFEO keys — website settings belong to the other half and may still be engaged.
+        => mutator.RestoreMatchingAsync(key => key.StartsWith("ifeo:", StringComparison.Ordinal), ct);
 
     private static IEnumerable<string> ImageNamesToBlock(RuleSet rules)
     {

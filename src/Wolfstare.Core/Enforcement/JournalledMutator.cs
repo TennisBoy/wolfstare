@@ -35,7 +35,10 @@ public sealed class JournalledMutator(
         await setting.WriteAsync(desired, ct);
     }
 
-    public async Task<RestoreReport> RestoreAllAsync(CancellationToken ct)
+    public Task<RestoreReport> RestoreAllAsync(CancellationToken ct)
+        => RestoreMatchingAsync(_ => true, ct);
+
+    public async Task<RestoreReport> RestoreMatchingAsync(Func<string, bool> keyFilter, CancellationToken ct)
     {
         var restored = new List<string>();
         var failed = new List<(string, Exception)>();
@@ -43,6 +46,8 @@ public sealed class JournalledMutator(
 
         foreach (var entry in await journal.GetAllAsync(ct))
         {
+            if (!keyFilter(entry.Key)) continue;
+
             var setting = resolve(entry.Key);
             if (setting is null)
             {

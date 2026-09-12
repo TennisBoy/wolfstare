@@ -109,5 +109,11 @@ public sealed class AppEnforcementTests
             Restored = true;
             return Task.FromResult(new RestoreReport([], [], []));
         }
+
+        public Task<RestoreReport> RestoreMatchingAsync(Func<string, bool> keyFilter, CancellationToken ct)
+        {
+            Restored = true;
+            return Task.FromResult(new RestoreReport([], [], []));
+        }
     }
 }

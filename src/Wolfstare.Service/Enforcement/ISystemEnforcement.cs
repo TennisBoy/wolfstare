@@ -2,7 +2,6 @@ using System.Net.NetworkInformation;
 using Microsoft.Extensions.Logging;
 using Wolfstare.Core.Enforcement;
 using Wolfstare.Core.Rules;
-using Wolfstare.Core.Storage;
 using Wolfstare.Enforcement.Machine;
 
 namespace Wolfstare.Service.Enforcement;
@@ -31,13 +30,13 @@ public sealed class NullSystemEnforcement : ISystemEnforcement
 
 /// <summary>
 /// The real implementation. Points every active interface's DNS at the sinkhole, registers the
-/// proxy, adds firewall egress rules, and disables browser DoH — all through the journalled
-/// mutator, so <see cref="RestoreAsync"/> and startup crash-recovery put everything back
-/// (spec §7).
+/// proxy, adds firewall egress rules, and disables browser DoH — all through the shared
+/// journalled mutator, so <see cref="RestoreAsync"/> and startup crash-recovery put everything
+/// back (spec §7).
 ///
-/// One <see cref="Catalog"/> produces every setting and its desired value. It backs both apply
-/// and the mutator's restore resolver, so a journalled key always maps back to the same setting
-/// — the resolver and the applier can never disagree about a key's shape.
+/// The mutator is shared with app enforcement: both write to one journal, and one
+/// <c>RestoreAllAsync</c> covers both. Restore reconstruction is handled by
+/// <see cref="SystemSettingResolver"/>, not here.
 ///
 /// Not unit-tested: it enumerates live interfaces and drives the untested Windows settings. The
 /// mutator it delegates to is tested; the manual E2E checklist covers this on real hardware.
@@ -49,21 +48,16 @@ public sealed class WindowsSystemEnforcement : ISystemEnforcement
     private readonly Func<IReadOnlyList<(ISystemSetting Setting, string? Desired)>> _catalog;
 
     public WindowsSystemEnforcement(
-        IMutationJournal journal,
+        ISystemMutator mutator,
         IProcessRunner runner,
         string proxyServer,
         string serviceExecutablePath,
         string userSid,
         ILogger<WindowsSystemEnforcement> logger)
     {
+        _mutator = mutator;
         _logger = logger;
         _catalog = () => BuildCatalog(runner, proxyServer, serviceExecutablePath, userSid);
-
-        // The resolver rebuilds the current catalog and finds the setting whose key matches, so
-        // a restore always reconstructs the setting exactly as apply created it.
-        _mutator = new JournalledMutator(
-            journal,
-            key => _catalog().Select(c => c.Setting).FirstOrDefault(s => s.Key == key));
     }
 
     public async Task ApplyAsync(RuleSet rules, CancellationToken ct)
@@ -74,7 +68,9 @@ public sealed class WindowsSystemEnforcement : ISystemEnforcement
 
     public async Task RestoreAsync(CancellationToken ct)
     {
-        var report = await _mutator.RestoreAllAsync(ct);
+        // Only the website settings — IFEO keys belong to app enforcement and may still be
+        // engaged when website enforcement disengages.
+        var report = await _mutator.RestoreMatchingAsync(key => !key.StartsWith("ifeo:", StringComparison.Ordinal), ct);
 
         if (!report.IsComplete)
             _logger.LogWarning(

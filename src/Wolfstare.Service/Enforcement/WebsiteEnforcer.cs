@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Wolfstare.Core.Rules;
 using Wolfstare.Core.Sessions;
 using Wolfstare.Enforcement;
+using Wolfstare.Enforcement.Apps;
 using Wolfstare.Enforcement.Dns;
 using Wolfstare.Enforcement.Proxy;
 
@@ -26,39 +27,47 @@ public sealed class WebsiteEnforcer : BackgroundService
     private readonly SessionManager _manager;
     private readonly RuleSetCache _cache;
     private readonly ISystemEnforcement _system;
+    private readonly IAppEnforcement _app;
     private readonly ILogger<WebsiteEnforcer> _logger;
     private readonly EnforcementOptions? _options;
     private readonly EnforcementHealth? _health;
+    private readonly ProcessWatcher? _watcher;
 
     private DnsSinkhole? _sinkhole;
     private BlockProxy? _proxy;
-    private bool _engaged;
+    private bool _websiteEngaged;
+    private bool _appEngaged;
 
     /// <summary>Test constructor: collaborators only. Servers and refresh are driven explicitly.</summary>
     public WebsiteEnforcer(
         SessionManager manager,
         RuleSetCache cache,
         ISystemEnforcement system,
-        ILogger<WebsiteEnforcer> logger)
+        ILogger<WebsiteEnforcer> logger,
+        IAppEnforcement? app = null)
     {
         _manager = manager;
         _cache = cache;
         _system = system;
+        _app = app ?? new NullAppEnforcement();
         _logger = logger;
     }
 
-    /// <summary>Hosted constructor: DI also supplies options and the shared health object.</summary>
+    /// <summary>Hosted constructor: DI also supplies options, health, app enforcement, and the watcher.</summary>
     public WebsiteEnforcer(
         SessionManager manager,
         RuleSetCache cache,
         ISystemEnforcement system,
+        IAppEnforcement app,
         ILogger<WebsiteEnforcer> logger,
         IOptions<EnforcementOptions> options,
-        EnforcementHealth health)
-        : this(manager, cache, system, logger)
+        EnforcementHealth health,
+        ProcessWatcher? watcher = null)
+        : this(manager, cache, system, logger, app)
     {
         _options = options.Value;
         _health = health;
+        _watcher = watcher;
     }
 
     /// <summary>The sinkhole's bound endpoint once started; null before <see cref="StartServersAsync"/>.</summary>
@@ -75,10 +84,23 @@ public sealed class WebsiteEnforcer : BackgroundService
             try
             {
                 await _system.RestoreAsync(stoppingToken);
+                await _app.RestoreAsync(stoppingToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Startup restore failed; continuing.");
+            }
+
+            // The watcher needs an elevated ETW session; failing to start it degrades rather
+            // than crashes, since IFEO still blocks the common case.
+            try
+            {
+                _watcher?.Start();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not start the process watcher; the rename backstop is unavailable.");
+                _health?.Degrade("The process watcher could not start; a renamed blocked app may run until relaunch.");
             }
         }
 
@@ -110,19 +132,33 @@ public sealed class WebsiteEnforcer : BackgroundService
         var rules = await _manager.GetEffectiveRuleSetAsync(ct);
         _cache.Update(rules);
 
-        // Website enforcement only has something to do when a domain rule is in play. An
-        // app-only session must not take over the machine's DNS.
-        var shouldEngage = rules.Rules.Concat(rules.Allowlist).Any(r => r is DomainRule);
+        // The two halves engage independently. Website takeover (DNS/proxy) only makes sense
+        // when a domain rule is in play; IFEO only when an image-name rule is. An app-only
+        // session must not take over DNS, and a site-only session must not write IFEO keys.
+        // (The ETW watcher, when running, reads the cache continuously and needs no engagement.)
+        var shouldEngageWebsite = rules.Rules.Concat(rules.Allowlist).Any(r => r is DomainRule);
+        var shouldEngageApp = rules.Rules.OfType<AppRule>().Any(r => r.Matcher is ImageNameMatcher);
 
-        if (shouldEngage && !_engaged)
+        if (shouldEngageWebsite && !_websiteEngaged)
         {
             await _system.ApplyAsync(rules, ct);
-            _engaged = true;
+            _websiteEngaged = true;
         }
-        else if (!shouldEngage && _engaged)
+        else if (!shouldEngageWebsite && _websiteEngaged)
         {
             await _system.RestoreAsync(ct);
-            _engaged = false;
+            _websiteEngaged = false;
+        }
+
+        if (shouldEngageApp && !_appEngaged)
+        {
+            await _app.ApplyAsync(rules, ct);
+            _appEngaged = true;
+        }
+        else if (!shouldEngageApp && _appEngaged)
+        {
+            await _app.RestoreAsync(ct);
+            _appEngaged = false;
         }
     }
 
@@ -165,6 +201,7 @@ public sealed class WebsiteEnforcer : BackgroundService
 
     public async Task StopServersAsync()
     {
+        _watcher?.Dispose();
         if (_proxy is not null) await _proxy.DisposeAsync();
         if (_sinkhole is not null) await _sinkhole.DisposeAsync();
         _proxy = null;
