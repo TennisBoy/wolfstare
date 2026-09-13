@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ActiveSessionDto } from "../api/types";
 import { api, ApiError } from "../api/client";
 import { formatDuration } from "../format";
@@ -9,18 +9,28 @@ interface Props {
   onStopped: () => void;
 }
 
-/// Stops an active session. A password lock asks for the password; a random-text lock shows the
-/// string and makes you retype it exactly (paste disabled); a timed lock cannot be stopped at
-/// all, and the server enforces that regardless of what this dialog sends.
+/// Stops an active session. A random-text lock shows the string as an image (never as text a
+/// script could read) and makes you retype it exactly; paste is disabled. A timed lock can't be
+/// stopped at all, and the server enforces every decision regardless of what this dialog sends.
 export function UnlockDialog({ session, onClose, onStopped }: Props) {
   const [entry, setEntry] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const isPassword = session.lockKind === "password";
   const isRandomText = session.lockKind === "randomtext";
-  const target = session.unlockText ?? "";
-  const matches = isRandomText && entry === target;
+  const expectedLength = session.unlockTextLength ?? 0;
+
+  // Load the unlock text as an image (only for a random-text lock).
+  useEffect(() => {
+    if (!isRandomText) return;
+    let revoked: string | null = null;
+    api.unlockImageUrl(session.blockListId)
+      .then((url) => { revoked = url; setImageUrl(url); })
+      .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+    return () => { if (revoked) URL.revokeObjectURL(revoked); };
+  }, [isRandomText, session.blockListId]);
 
   async function stop() {
     setError(null);
@@ -45,23 +55,14 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
     }
   }
 
-  // Block every shortcut around actually typing the string: paste, drag-drop, and copying the
-  // shown text. This is a friction nudge in the browser — see the honest caveat below about the
-  // API — not a hard wall.
   const block = (e: React.SyntheticEvent) => e.preventDefault();
-  const noTypingHelpers = {
-    autoComplete: "off",
-    autoCorrect: "off",
-    autoCapitalize: "off",
-    spellCheck: false,
-  } as const;
 
   return (
     <div className="overlay" onClick={onClose}>
       <div
         className="dialog"
         onClick={(e) => e.stopPropagation()}
-        style={isRandomText ? { width: "min(40rem, 100%)" } : undefined}
+        style={isRandomText ? { width: "min(46rem, 100%)" } : undefined}
       >
         <h3>Stop "{session.blockListName}"</h3>
 
@@ -81,19 +82,11 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
 
         {isRandomText && (
           <>
-            <label>Retype this exactly ({target.length} characters) — no pasting</label>
-            <textarea
-              readOnly
-              value={target}
-              onCopy={block}
-              onCut={block}
-              onContextMenu={block}
-              rows={4}
-              style={{
-                width: "100%", fontFamily: "monospace", wordBreak: "break-all", resize: "none",
-                userSelect: "none",
-              }}
-            />
+            <label>Retype this exactly ({expectedLength} characters) — no pasting</label>
+            {imageUrl
+              ? <img src={imageUrl} alt="" draggable={false} onContextMenu={block}
+                     style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 6 }} />
+              : <div className="meta">Loading…</div>}
             <label htmlFor="retype">Your entry</label>
             <textarea
               id="retype"
@@ -103,11 +96,14 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
               onPaste={block}
               onDrop={block}
               onContextMenu={block}
-              rows={4}
-              {...noTypingHelpers}
+              rows={5}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               style={{ width: "100%", fontFamily: "monospace", wordBreak: "break-all", resize: "none" }}
             />
-            <div className="meta">{entry.length} / {target.length} characters{matches ? " — matches" : ""}</div>
+            <div className="meta">{entry.length} / {expectedLength} characters</div>
           </>
         )}
 
@@ -120,7 +116,7 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
           <button
             className="danger"
             onClick={stop}
-            disabled={busy || (isPassword && !entry) || (isRandomText && !matches)}
+            disabled={busy || (isPassword && !entry) || (isRandomText && entry.length !== expectedLength)}
           >
             Stop
           </button>

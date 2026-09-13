@@ -68,4 +68,14 @@ export const api = {
     request<void>("POST", `/blocklists/${id}/stop`, { password: password ?? null }),
   unlock: (blockListId: string, password: string) =>
     request<void>("POST", "/unlock", { blockListId, password }),
+
+  // The unlock text is served only as an image, never as a string, so a script can't read it
+  // and post it back. Returns an object URL for an <img>.
+  unlockImageUrl: async (id: string): Promise<string> => {
+    const response = await fetch(`/api/blocklists/${id}/unlock-image`, {
+      headers: { Authorization: `Bearer ${token()}` },
+    });
+    if (!response.ok) throw new ApiError(response.status, "Could not load the unlock image.");
+    return URL.createObjectURL(await response.blob());
+  },
 };

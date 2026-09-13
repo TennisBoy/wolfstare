@@ -28,7 +28,7 @@ export interface ActiveSessionDto {
   remainingSeconds: number | null;
   elapsedSeconds: number;
   canBeStopped: boolean;
-  unlockText: string | null;
+  unlockTextLength: number | null;
 }
 
 export interface StatusDto {

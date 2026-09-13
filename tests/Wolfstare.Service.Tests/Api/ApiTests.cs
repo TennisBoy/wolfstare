@@ -227,27 +227,53 @@ public sealed class ApiTests : IClassFixture<WolfstareFactory>
     }
 
     [Fact]
-    public async Task RandomTextLockExposesTheTextAndUnlocksOnlyOnAnExactRetype()
+    public async Task StatusGivesTheUnlockLengthButNotTheText()
     {
+        // The text must not be readable through the API — only its length, and the image. This
+        // is what stops a script reading the answer and posting it back.
         var client = Client();
         var id = await CreateList(client, "Random text");
-
         (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
 
-        // The status exposes the text to retype (it is not a secret).
-        var status = await client.GetFromJsonAsync<StatusDto>("/api/status");
+        var raw = await client.GetStringAsync("/api/status");
+        Assert.DoesNotContain("unlockText\"", raw);            // no text field at all
+        Assert.Contains("unlockTextLength", raw);
+
+        var status = System.Text.Json.JsonSerializer.Deserialize<StatusDto>(
+            raw, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         var session = Assert.Single(status!.ActiveSessions, s => s.BlockListId == id);
-        Assert.Equal("randomtext", session.LockKind);
-        Assert.NotNull(session.UnlockText);
-        Assert.Equal(5000, session.UnlockText!.Length);
+        Assert.Equal(5000, session.UnlockTextLength);
+    }
 
-        // Wrong text is refused.
-        var wrong = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, session.UnlockText + "x"));
+    [Fact]
+    public async Task TheUnlockTextIsServedOnlyAsAnImage()
+    {
+        var client = Client();
+        var id = await CreateList(client, "Image challenge");
+        (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
+
+        var image = await client.GetAsync($"/api/blocklists/{id}/unlock-image");
+
+        Assert.Equal(HttpStatusCode.OK, image.StatusCode);
+        Assert.Equal("image/png", image.Content.Headers.ContentType!.MediaType);
+        var bytes = await image.Content.ReadAsByteArrayAsync();
+        Assert.True(bytes.Length > 100);
+        // PNG magic number.
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47 }, bytes[..4]);
+    }
+
+    [Fact]
+    public async Task WrongRetypeIsRefused()
+    {
+        // The correct-text path is covered exhaustively by the Core StopPolicy tests; the API
+        // deliberately has no way to hand a test (or a script) the correct text.
+        var client = Client();
+        var id = await CreateList(client, "Wrong retype");
+        (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
+
+        var wrong = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, new string('x', 5000)));
+
         Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
-
-        // The exact text ends it.
-        var right = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, session.UnlockText));
-        Assert.Equal(HttpStatusCode.OK, right.StatusCode);
     }
 
     [Fact]

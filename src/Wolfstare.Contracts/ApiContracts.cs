@@ -39,9 +39,10 @@ public sealed record ActiveSessionDto(
     long? RemainingSeconds,
     long ElapsedSeconds,
     bool CanBeStopped,
-    // For a random-text lock, the string the user must retype to stop it. Null otherwise. It is
-    // not a secret — showing it is the point.
-    string? UnlockText = null);
+    // For a random-text lock, how many characters must be retyped to stop it. The text itself is
+    // never returned as a string — it is served only as an image (GET /api/blocklists/{id}/unlock-image)
+    // so it cannot be scraped and posted back by a script.
+    int? UnlockTextLength = null);
 
 public sealed record StatusDto(
     IReadOnlyList<ActiveSessionDto> ActiveSessions,

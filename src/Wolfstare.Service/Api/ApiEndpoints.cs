@@ -33,6 +33,7 @@ public static class ApiEndpoints
 
         api.MapPost("/blocklists/{id:guid}/start", StartSession);
         api.MapPost("/blocklists/{id:guid}/stop", StopSession);
+        api.MapGet("/blocklists/{id:guid}/unlock-image", GetUnlockImage);
         api.MapPost("/unlock", Unlock);
     }
 
@@ -57,7 +58,7 @@ public static class ApiEndpoints
                 session.RemainingSeconds(),
                 session.Timing.ElapsedSeconds,
                 CanBeStopped: session.Lock is NoLock || session.IsExpired(),
-                UnlockText: session.Lock is RandomTextLock r ? r.RequiredText : null));
+                UnlockTextLength: session.Lock is RandomTextLock r ? r.RequiredText.Length : null));
         }
 
         // Health reflects the enforcement subsystems: "ok", or "degraded" with a reason the UI
@@ -161,6 +162,23 @@ public static class ApiEndpoints
                 new ErrorDto("A timed lock needs a duration, otherwise it could never end.")),
             _ => Results.BadRequest(new ErrorDto("Could not start the session.")),
         };
+    }
+
+    /// <summary>
+    /// Serves the random-text unlock string as a PNG. The text is never returned as a string by
+    /// any endpoint — rendering it as pixels is what stops a script reading it and posting it
+    /// back. Requires the bearer token like everything else under /api.
+    /// </summary>
+    private static async Task<IResult> GetUnlockImage(Guid id, SessionManager manager, CancellationToken ct)
+    {
+        var session = (await manager.GetActiveAsync(ct)).FirstOrDefault(s => s.BlockListId == id);
+        if (session?.Lock is not RandomTextLock rt)
+            return Results.NotFound();
+
+        if (!OperatingSystem.IsWindows())
+            return Results.Problem("Image rendering is only available on Windows.");
+
+        return Results.File(UnlockChallengeImage.RenderPng(rt.RequiredText), "image/png");
     }
 
     private static async Task<IResult> StopSession(
