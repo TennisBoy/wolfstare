@@ -59,6 +59,17 @@ public sealed class ApiTests : IClassFixture<WolfstareFactory>
     }
 
     [Fact]
+    public async Task HealthIsReachableWithoutAToken()
+    {
+        // The liveness probe returns nothing sensitive, so readiness checks need no token.
+        var anonymous = _factory.CreateClient();
+
+        var response = await anonymous.GetAsync("/api/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task RequestWithAWrongTokenIsRejected()
     {
         var client = _factory.CreateClient();

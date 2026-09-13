@@ -20,6 +20,14 @@ public sealed class LocalApiGuard(string token) : IMiddleware
             return;
         }
 
+        // /api/health is a liveness probe — it returns nothing sensitive, so it needs no token.
+        // Everything else under /api does. This keeps readiness checks and monitoring simple.
+        if (context.Request.Path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
+        {
+            await next(context);
+            return;
+        }
+
         // A cross-origin Origin header means a web page is driving this request. No legitimate
         // client sends one, so reject before doing any work.
         if (context.Request.Headers.Origin.Count > 0 && !IsLoopbackOrigin(context.Request.Headers.Origin!))
