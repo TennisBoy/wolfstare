@@ -11,11 +11,14 @@ namespace Wolfstare.Service.Tests.Enforcement;
 /// </summary>
 public sealed class AppEnforcementTests
 {
+    private const string Stub = @"C:\Program Files\Wolfstare\Wolfstare.BlockStub.exe";
     private readonly RecordingMutator _mutator = new();
 
-    private WindowsAppEnforcement NewEnforcement()
-        => new(_mutator, @"C:\Program Files\Wolfstare\Wolfstare.BlockStub.exe",
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<WindowsAppEnforcement>.Instance);
+    // The enumerator of existing redirects is faked so tests never touch the real registry.
+    private WindowsAppEnforcement NewEnforcement(params string[] existingRedirects)
+        => new(_mutator, Stub,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<WindowsAppEnforcement>.Instance,
+            () => existingRedirects);
 
     private static RuleSet Set(params BlockRule[] rules) => new(rules, []);
 
@@ -85,11 +88,38 @@ public sealed class AppEnforcementTests
     }
 
     [Fact]
-    public async Task RestoreDelegatesToTheMutator()
+    public async Task ReconcileRemovesAnOrphanedRedirectNoBlockCallsFor()
     {
-        await NewEnforcement().RestoreAsync(default);
+        // The bug this fixes: a redirect for steam.exe exists, but no active rule wants it.
+        // ApplyAsync must remove it (write the setting with a null value) so the app isn't left
+        // blocked with no session to unlock.
+        await NewEnforcement("steam.exe")
+            .ApplyAsync(Set(new DomainRule("reddit.com")), default);
 
-        Assert.True(_mutator.Restored);
+        var removed = Assert.Single(_mutator.Applied);
+        Assert.Equal("ifeo:steam.exe", removed.Setting.Key);
+        Assert.Null(removed.Desired);                    // null = remove the redirect
+    }
+
+    [Fact]
+    public async Task ReconcileKeepsARedirectStillWanted()
+    {
+        // steam.exe exists AND is still blocked: it should be re-applied (kept), not removed.
+        await NewEnforcement("steam.exe")
+            .ApplyAsync(Set(new AppRule(new ImageNameMatcher("steam.exe"))), default);
+
+        var applied = Assert.Single(_mutator.Applied);
+        Assert.Equal("ifeo:steam.exe", applied.Setting.Key);
+        Assert.Equal(Stub, applied.Desired);             // re-applied, not removed
+    }
+
+    [Fact]
+    public async Task RestoreRemovesEveryOwnedRedirect()
+    {
+        await NewEnforcement("steam.exe", "discord.exe").RestoreAsync(default);
+
+        Assert.Equal(2, _mutator.Applied.Count);
+        Assert.All(_mutator.Applied, a => Assert.Null(a.Desired));   // all removed
     }
 
     private sealed class RecordingMutator : ISystemMutator

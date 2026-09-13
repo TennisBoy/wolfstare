@@ -38,7 +38,6 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
     private DnsSinkhole? _sinkhole;
     private BlockProxy? _proxy;
     private bool _websiteEngaged;
-    private bool _appEngaged;
     private bool _stopDenied;
 
     /// <summary>Test constructor: collaborators only. Servers and refresh are driven explicitly.</summary>
@@ -146,7 +145,6 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
         // session must not take over DNS, and a site-only session must not write IFEO keys.
         // (The ETW watcher, when running, reads the cache continuously and needs no engagement.)
         var shouldEngageWebsite = rules.Rules.Concat(rules.Allowlist).Any(r => r is DomainRule);
-        var shouldEngageApp = rules.Rules.OfType<AppRule>().Any(r => r.Matcher is ImageNameMatcher);
 
         if (shouldEngageWebsite && !_websiteEngaged)
         {
@@ -174,21 +172,13 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
             _stopDenied = false;
         }
 
-        // App enforcement self-heals: ApplyAsync runs every tick while engaged, not just on the
-        // transition. ApplyAsync is idempotent (the mutator skips a key already at its value), so
-        // the only time it writes is when a key is missing — which is exactly the case when
-        // someone has just deleted one in regedit. It reappears within a refresh interval. This
-        // also means a rule added to a running session takes effect on the next tick.
-        if (shouldEngageApp)
-        {
-            await _app.ApplyAsync(rules, ct);
-            _appEngaged = true;
-        }
-        else if (_appEngaged)
-        {
-            await _app.RestoreAsync(ct);
-            _appEngaged = false;
-        }
+        // App enforcement fully reconciles every tick: ApplyAsync makes the IFEO redirects match
+        // the active rules exactly — writing missing ones (self-heals a deleted key, applies a
+        // rule added mid-session) and removing any redirect no active block calls for (clears an
+        // orphaned key so an app can't be left blocked with no session to unlock). It is not
+        // gated on an engaged flag on purpose: that edge-triggering was what let orphans linger
+        // across a restart. It is a no-op when ModifySystem is off.
+        await _app.ApplyAsync(rules, ct);
     }
 
     /// <summary>

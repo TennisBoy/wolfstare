@@ -234,12 +234,13 @@ public sealed class WebsiteEnforcerTests
         await enforcer.RefreshOnceAsync(CancellationToken.None);
 
         Assert.Equal(3, app.ApplyCount);
-        Assert.False(app.Restored);
     }
 
     [Fact]
-    public async Task AppEnforcementRestoresWhenTheSessionEnds()
+    public async Task AppEnforcementReconcilesToNoAppRulesWhenTheSessionEnds()
     {
+        // With the reconcile model, ending the session doesn't call a separate Restore — the next
+        // ApplyAsync just receives rules with no app rule, and the reconcile removes the redirect.
         var manager = NewManager();
         var app = new RecordingAppEnforcement();
         var list = new BlockList(
@@ -248,11 +249,12 @@ public sealed class WebsiteEnforcerTests
         await manager.StartAsync(new SessionStartRequest(list.Id, 3600, new NoLock()));
         var enforcer = new WebsiteEnforcer(manager, _cache, _system, NullLogger<WebsiteEnforcer>.Instance, app);
         await enforcer.RefreshOnceAsync(CancellationToken.None);
+        Assert.Equal(1, app.LastAppImageRuleCount);
 
         await manager.StopAsync(list.Id, null);
         await enforcer.RefreshOnceAsync(CancellationToken.None);
 
-        Assert.True(app.Restored);
+        Assert.Equal(0, app.LastAppImageRuleCount);   // reconcile told to want nothing → removes it
     }
 
     /// <summary>Records apply/restore calls so the ModifySystem decision can be asserted.</summary>
@@ -284,19 +286,15 @@ public sealed class WebsiteEnforcerTests
     {
         public int ApplyCount { get; private set; }
 
-        public bool Restored { get; private set; }
+        public int LastAppImageRuleCount { get; private set; } = -1;
 
         public Task ApplyAsync(RuleSet rules, CancellationToken ct)
         {
             ApplyCount++;
-            Restored = false;
+            LastAppImageRuleCount = rules.Rules.OfType<AppRule>().Count(r => r.Matcher is ImageNameMatcher);
             return Task.CompletedTask;
         }
 
-        public Task RestoreAsync(CancellationToken ct)
-        {
-            Restored = true;
-            return Task.CompletedTask;
-        }
+        public Task RestoreAsync(CancellationToken ct) => Task.CompletedTask;
     }
 }

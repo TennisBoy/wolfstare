@@ -57,6 +57,47 @@ public sealed class ImageFileExecutionOptionsSetting : ISystemSetting
 
     public string Key => $"ifeo:{_imageName}";
 
+    /// <summary>
+    /// Every image name whose IFEO Debugger currently points at <paramref name="stubPath"/> —
+    /// i.e. every redirect Wolfstare owns. The reconcile loop uses this to remove redirects that
+    /// no active block calls for, so an orphaned key can't strand an app as blocked with no
+    /// session to unlock. Reads both registry views.
+    /// </summary>
+    public static IReadOnlyList<string> RedirectedTo(string stubPath)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var basePath in new[]
+                 {
+                     @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options",
+                     @"SOFTWARE\WOW6432Node\Microsoft\Windows NT\CurrentVersion\Image File Execution Options",
+                 })
+        {
+            using var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+            using var parent = root.OpenSubKey(basePath, writable: false);
+            if (parent is null) continue;
+
+            foreach (var name in parent.GetSubKeyNames())
+            {
+                try
+                {
+                    using var sub = parent.OpenSubKey(name, writable: false);
+                    if (sub?.GetValue(DebuggerValue) is string dbg
+                        && string.Equals(dbg, stubPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        names.Add(name);
+                    }
+                }
+                catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
+                {
+                    // A key we can't read isn't one we can act on; skip it.
+                }
+            }
+        }
+
+        return names.ToList();
+    }
+
     public Task<string?> ReadAsync(CancellationToken ct)
     {
         using var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
