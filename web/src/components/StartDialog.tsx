@@ -42,7 +42,7 @@ export function StartDialog({ list, onClose, onStarted }: Props) {
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
         <h3>Start "{list.name}"</h3>
 
-        <label htmlFor="len">Characters of random words to retype ({MIN_LENGTH}–{MAX_LENGTH})</label>
+        <label htmlFor="len">Characters of random words to retype (up to; {MIN_LENGTH}–{MAX_LENGTH})</label>
         <input
           id="len"
           type="number"
@@ -53,9 +53,10 @@ export function StartDialog({ list, onClose, onStarted }: Props) {
         />
 
         <p className="meta" style={{ marginTop: 12 }}>
-          This block runs until you retype about {textLength} characters of random words exactly,
-          by hand — pasting is disabled. There is no timer and no password: the typing is the only
-          way out through the app.
+          This block runs until you retype the words shown, exactly, by hand — pasting is disabled.
+          It'll be up to {textLength} characters (whole words, so it stops just under that), and the
+          unlock screen shows the exact count. There is no timer and no password: typing it is the
+          only way out through the app.
         </p>
 
         {error && <div className="error">{error}</div>}
