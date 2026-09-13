@@ -22,6 +22,27 @@ public class UnlockChallengeImageTests
     }
 
     [Fact]
+    public void WrapNeverSplitsAWordAcrossLines()
+    {
+        var words = Enumerable.Range(0, 60).Select(i => $"word{i}").ToArray();
+        var text = string.Join(' ', words);
+
+        var lines = UnlockChallengeImage.Wrap(text, 80);
+
+        // Every token on every line is one of the original whole words — nothing was cut.
+        var wordSet = words.ToHashSet();
+        foreach (var line in lines)
+        {
+            Assert.True(line.Length <= 80, $"line too wide: {line.Length}");
+            foreach (var token in line.Split(' '))
+                Assert.Contains(token, wordSet);
+        }
+
+        // And the words, read back in order across lines, are the original sequence intact.
+        Assert.Equal(words, lines.SelectMany(l => l.Split(' ')).ToArray());
+    }
+
+    [Fact]
     public void DifferentTextProducesDifferentPixels()
     {
         // Sanity: the render actually reflects the text, so it isn't a blank placeholder.

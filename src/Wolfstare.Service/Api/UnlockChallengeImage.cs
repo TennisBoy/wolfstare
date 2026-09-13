@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.Versioning;
+using System.Text;
 
 namespace Wolfstare.Service.Api;
 
@@ -53,11 +54,30 @@ public static class UnlockChallengeImage
         return stream.ToArray();
     }
 
-    private static List<string> Wrap(string text, int width)
+    /// <summary>
+    /// Wraps at word boundaries so a word is never split across a line — otherwise "art" shows
+    /// as "ar" at one line's end and "t" at the next, which looks like a cut-off word.
+    /// </summary>
+    public static List<string> Wrap(string text, int width)
     {
         var lines = new List<string>();
-        for (var i = 0; i < text.Length; i += width)
-            lines.Add(text.Substring(i, Math.Min(width, text.Length - i)));
+        var current = new StringBuilder();
+
+        foreach (var word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (current.Length == 0)
+                current.Append(word);
+            else if (current.Length + 1 + word.Length <= width)
+                current.Append(' ').Append(word);
+            else
+            {
+                lines.Add(current.ToString());
+                current.Clear();
+                current.Append(word);
+            }
+        }
+
+        if (current.Length > 0) lines.Add(current.ToString());
         return lines.Count == 0 ? [string.Empty] : lines;
     }
 }
