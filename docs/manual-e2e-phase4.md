@@ -53,3 +53,26 @@ you don't mind having killed.
 - [ ] The IFEO keys are still present (enforcement outlived the process).
 - [ ] Restart the service; it restores-then-reapplies from the journal. Keys still present, session still counting down.
 - [ ] Let the session end; confirm the keys are removed — the journal held the true "absent" original across the crash.
+
+---
+
+## 7. Tamper hardening (installed service, ModifySystem=true)
+
+These only take full effect when installed via `scripts\install.ps1` (running as LocalSystem),
+not a dev console run. None is admin-proof — they raise the cost.
+
+- [ ] **Self-healing IFEO.** With an app block active, delete its key in regedit
+  (`HKLM\...\Image File Execution Options\<app>.exe`). Within ~2 seconds the service rewrites
+  it. Launching the app is blocked again.
+- [ ] **ACL'd keys.** With an app block active, try to delete its IFEO key in regedit as an
+  administrator → access denied. Confirm the key's owner is `SYSTEM` and Administrators have a
+  Deny-Delete ACE. (Taking ownership first still lets an admin delete it — that's the accepted
+  ceiling.)
+- [ ] **Stop-denial.** With any block active, `sc stop Wolfstare` from an elevated prompt is
+  refused. End the block (retype the text) → `sc stop` works again. Confirm `sc sdshow Wolfstare`
+  shows the `(D;;WP;;;IU)` deny ACE while locked and not after.
+- [ ] **Auto-restart.** Kill `Wolfstare.Service.exe` in Task Manager → it restarts within
+  seconds (failure actions), and the block is re-applied.
+- [ ] **The ceiling holds.** Confirm the honest limits still work as escapes: booting to safe
+  mode, or `sc delete` after taking ownership, or deleting the database, all end the block.
+  These are documented non-goals, not bugs.
