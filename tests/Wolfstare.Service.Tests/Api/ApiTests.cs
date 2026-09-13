@@ -242,7 +242,8 @@ public sealed class ApiTests : IClassFixture<WolfstareFactory>
         var status = System.Text.Json.JsonSerializer.Deserialize<StatusDto>(
             raw, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
         var session = Assert.Single(status!.ActiveSessions, s => s.BlockListId == id);
-        Assert.Equal(5000, session.UnlockTextLength);
+        // Word-based text lands at most on, and within one word of, the requested length.
+        Assert.InRange(session.UnlockTextLength!.Value, 4980, 5000);
     }
 
     [Fact]

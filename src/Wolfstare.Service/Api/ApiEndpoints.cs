@@ -15,8 +15,10 @@ namespace Wolfstare.Service.Api;
 /// </summary>
 public static class ApiEndpoints
 {
-    /// <summary>The floor on a random-text lock. A block below this offers too little friction to matter.</summary>
-    public const int RandomTextLockMinLength = 5000;
+    /// <summary>The allowed range for a random-text lock's length, in characters.</summary>
+    public const int RandomTextLockMinLength = 200;
+    public const int RandomTextLockMaxLength = 5000;
+    private const int RandomTextLockDefaultLength = 500;
 
     public static void MapWolfstareApi(this IEndpointRouteBuilder app)
     {
@@ -136,10 +138,10 @@ public static class ApiEndpoints
                 "Only random-text locks are allowed. There is no weaker lock to fall back on — "
                 + "a block can only be ended by retyping its text."));
 
-        var length = request.Lock.TextLength ?? RandomTextLockMinLength;
-        if (length < RandomTextLockMinLength || length > 100_000)
+        var length = request.Lock.TextLength ?? RandomTextLockDefaultLength;
+        if (length < RandomTextLockMinLength || length > RandomTextLockMaxLength)
             return Results.BadRequest(new ErrorDto(
-                $"Random-text length must be between {RandomTextLockMinLength} and 100000 characters."));
+                $"Random-text length must be between {RandomTextLockMinLength} and {RandomTextLockMaxLength} characters."));
 
         SessionLock sessionLock = new RandomTextLock(RandomText.Generate(length));
 

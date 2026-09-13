@@ -8,13 +8,15 @@ interface Props {
   onStarted: () => void;
 }
 
-const MIN_LENGTH = 5000;
+const MIN_LENGTH = 200;
+const MAX_LENGTH = 5000;
+const DEFAULT_LENGTH = 500;
 
-/// Only one lock exists: a random-text lock of at least 5000 characters. There is deliberately
-/// no weaker option — no timer to wait out, no password to remember your way past. The only way
-/// to end a block through the app is to retype its string by hand.
+/// Only one lock exists: a random-text lock. To stop the block you retype a string of random
+/// words (200-5000 characters), by hand. No timer, no password — the typing is the only way out
+/// through the app.
 export function StartDialog({ list, onClose, onStarted }: Props) {
-  const [textLength, setTextLength] = useState(MIN_LENGTH);
+  const [textLength, setTextLength] = useState(DEFAULT_LENGTH);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,20 +42,20 @@ export function StartDialog({ list, onClose, onStarted }: Props) {
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
         <h3>Start "{list.name}"</h3>
 
-        <label htmlFor="len">Characters to retype to unlock (minimum {MIN_LENGTH})</label>
+        <label htmlFor="len">Characters of random words to retype ({MIN_LENGTH}–{MAX_LENGTH})</label>
         <input
           id="len"
           type="number"
           min={MIN_LENGTH}
-          max={100000}
+          max={MAX_LENGTH}
           value={textLength}
-          onChange={(e) => setTextLength(Math.max(MIN_LENGTH, Number(e.target.value)))}
+          onChange={(e) => setTextLength(Math.min(MAX_LENGTH, Math.max(MIN_LENGTH, Number(e.target.value))))}
         />
 
         <p className="meta" style={{ marginTop: 12 }}>
-          This block runs until you retype {textLength} random characters exactly, by hand —
-          pasting is disabled. There is no timer and no password: the typing is the only way out
-          through the app.
+          This block runs until you retype about {textLength} characters of random words exactly,
+          by hand — pasting is disabled. There is no timer and no password: the typing is the only
+          way out through the app.
         </p>
 
         {error && <div className="error">{error}</div>}

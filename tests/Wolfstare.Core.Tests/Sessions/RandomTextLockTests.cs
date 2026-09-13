@@ -18,26 +18,25 @@ public class RandomTextLockTests
         => new(Guid.NewGuid(), Guid.NewGuid(), new RandomTextLock(text), SessionTiming.Start(_clock), duration);
 
     [Fact]
-    public void GeneratesTextOfTheRequestedLength()
+    public void GeneratesTextUpToButNotOverTheRequestedLength()
     {
+        // Words rarely land exactly on a target, so the result is at most the target and within
+        // one word of it.
         var text = RandomText.Generate(5000);
 
-        Assert.Equal(5000, text.Length);
+        Assert.True(text.Length <= 5000);
+        Assert.True(text.Length >= 5000 - 12, $"expected close to 5000, got {text.Length}");
     }
 
     [Fact]
-    public void GeneratedTextIsFromAnUnambiguousAlphabet()
+    public void GeneratedTextIsLowercaseWordsSeparatedBySpaces()
     {
-        // Retyping 5000 characters is punishing enough without ambiguous glyphs; the alphabet
-        // excludes look-alikes (0/O, 1/l/I).
-        var text = RandomText.Generate(2000);
+        var text = RandomText.Generate(500);
 
-        Assert.DoesNotContain('0', text);
-        Assert.DoesNotContain('O', text);
-        Assert.DoesNotContain('1', text);
-        Assert.DoesNotContain('l', text);
-        Assert.DoesNotContain('I', text);
-        Assert.All(text, c => Assert.True(char.IsLetterOrDigit(c)));
+        Assert.All(text, c => Assert.True(c is (>= 'a' and <= 'z') or ' '));
+        Assert.Contains(' ', text);                       // more than one word
+        Assert.DoesNotContain("  ", text);                // single spaces, no doubles
+        Assert.False(text.StartsWith(' ') || text.EndsWith(' '));
     }
 
     [Fact]
