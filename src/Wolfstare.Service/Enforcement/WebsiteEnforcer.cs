@@ -8,6 +8,7 @@ using Wolfstare.Enforcement;
 using Wolfstare.Enforcement.Apps;
 using Wolfstare.Enforcement.Dns;
 using Wolfstare.Enforcement.Proxy;
+using Wolfstare.Service.ServiceControl;
 
 namespace Wolfstare.Service.Enforcement;
 
@@ -28,6 +29,7 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
     private readonly RuleSetCache _cache;
     private readonly ISystemEnforcement _system;
     private readonly IAppEnforcement _app;
+    private readonly IServiceHardening _hardening;
     private readonly ILogger<WebsiteEnforcer> _logger;
     private readonly EnforcementOptions? _options;
     private readonly EnforcementHealth? _health;
@@ -37,6 +39,7 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
     private BlockProxy? _proxy;
     private bool _websiteEngaged;
     private bool _appEngaged;
+    private bool _stopDenied;
 
     /// <summary>Test constructor: collaborators only. Servers and refresh are driven explicitly.</summary>
     public WebsiteEnforcer(
@@ -44,12 +47,14 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
         RuleSetCache cache,
         ISystemEnforcement system,
         ILogger<WebsiteEnforcer> logger,
-        IAppEnforcement? app = null)
+        IAppEnforcement? app = null,
+        IServiceHardening? hardening = null)
     {
         _manager = manager;
         _cache = cache;
         _system = system;
         _app = app ?? new NullAppEnforcement();
+        _hardening = hardening ?? new NullServiceHardening();
         _logger = logger;
     }
 
@@ -59,11 +64,12 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
         RuleSetCache cache,
         ISystemEnforcement system,
         IAppEnforcement app,
+        IServiceHardening hardening,
         ILogger<WebsiteEnforcer> logger,
         IOptions<EnforcementOptions> options,
         EnforcementHealth health,
         ProcessWatcher? watcher = null)
-        : this(manager, cache, system, logger, app)
+        : this(manager, cache, system, logger, app, hardening)
     {
         _options = options.Value;
         _health = health;
@@ -153,12 +159,32 @@ public sealed class WebsiteEnforcer : BackgroundService, IEnforcementRefresh
             _websiteEngaged = false;
         }
 
-        if (shouldEngageApp && !_appEngaged)
+        // Deny the interactive user the right to stop the service while any block is active, so
+        // the enforcement process cannot be killed off from under a lock (spec §9). No-op unless
+        // Wolfstare is installed as a service.
+        var anyActive = (await _manager.GetActiveAsync(ct)).Count > 0;
+        if (anyActive && !_stopDenied)
+        {
+            await _hardening.DenyStopAsync(ct);
+            _stopDenied = true;
+        }
+        else if (!anyActive && _stopDenied)
+        {
+            await _hardening.AllowStopAsync(ct);
+            _stopDenied = false;
+        }
+
+        // App enforcement self-heals: ApplyAsync runs every tick while engaged, not just on the
+        // transition. ApplyAsync is idempotent (the mutator skips a key already at its value), so
+        // the only time it writes is when a key is missing — which is exactly the case when
+        // someone has just deleted one in regedit. It reappears within a refresh interval. This
+        // also means a rule added to a running session takes effect on the next tick.
+        if (shouldEngageApp)
         {
             await _app.ApplyAsync(rules, ct);
             _appEngaged = true;
         }
-        else if (!shouldEngageApp && _appEngaged)
+        else if (_appEngaged)
         {
             await _app.RestoreAsync(ct);
             _appEngaged = false;

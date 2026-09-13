@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Hosting.WindowsServices;
+using Microsoft.Extensions.Options;
 using Wolfstare.Core.Sessions;
 using Wolfstare.Core.Storage;
 using Wolfstare.Core.Time;
@@ -55,6 +56,18 @@ builder.Services.AddSingleton<IProcessRunner, ProcessRunner>();
 builder.Services.AddSingleton(sp => EnforcementFactory.CreateSystem(sp, paths));
 builder.Services.AddSingleton(sp => EnforcementFactory.CreateApp(sp, paths));
 builder.Services.AddSingleton(sp => EnforcementFactory.CreateWatcher(sp));
+builder.Services.AddSingleton<IServiceHardening>(sp =>
+{
+    // Harden only when installed as a service and enforcing; otherwise the descriptor edits
+    // are meaningless (dev console run) and the null implementation keeps it a no-op.
+    var opts = sp.GetRequiredService<IOptions<EnforcementOptions>>().Value;
+    return opts.ModifySystem && WindowsServiceHelpers.IsWindowsService()
+        ? new WindowsServiceHardening(
+            sp.GetRequiredService<IProcessRunner>(),
+            "Wolfstare",
+            sp.GetRequiredService<ILogger<WindowsServiceHardening>>())
+        : new NullServiceHardening();
+});
 builder.Services.AddSingleton<WebsiteEnforcer>();
 builder.Services.AddSingleton<IEnforcementRefresh>(sp => sp.GetRequiredService<WebsiteEnforcer>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WebsiteEnforcer>());

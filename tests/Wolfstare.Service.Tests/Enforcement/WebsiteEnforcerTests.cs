@@ -215,6 +215,46 @@ public sealed class WebsiteEnforcerTests
         return (await client.ReceiveAsync(cts.Token)).Buffer;
     }
 
+    [Fact]
+    public async Task AppEnforcementSelfHealsByReApplyingEveryTick()
+    {
+        // If a blocked IFEO key is deleted while the service runs, the next tick must put it
+        // back — so ApplyAsync is expected to run on every refresh while engaged, not once.
+        var manager = NewManager();
+        var app = new RecordingAppEnforcement();
+        var list = new BlockList(
+            Guid.NewGuid(), "Games", [new AppRule(new ImageNameMatcher("steam.exe"))], []);
+        await _lists.SaveAsync(list);
+        await manager.StartAsync(new SessionStartRequest(list.Id, 3600, new NoLock()));
+
+        var enforcer = new WebsiteEnforcer(manager, _cache, _system, NullLogger<WebsiteEnforcer>.Instance, app);
+
+        await enforcer.RefreshOnceAsync(CancellationToken.None);
+        await enforcer.RefreshOnceAsync(CancellationToken.None);
+        await enforcer.RefreshOnceAsync(CancellationToken.None);
+
+        Assert.Equal(3, app.ApplyCount);
+        Assert.False(app.Restored);
+    }
+
+    [Fact]
+    public async Task AppEnforcementRestoresWhenTheSessionEnds()
+    {
+        var manager = NewManager();
+        var app = new RecordingAppEnforcement();
+        var list = new BlockList(
+            Guid.NewGuid(), "Games", [new AppRule(new ImageNameMatcher("steam.exe"))], []);
+        await _lists.SaveAsync(list);
+        await manager.StartAsync(new SessionStartRequest(list.Id, 3600, new NoLock()));
+        var enforcer = new WebsiteEnforcer(manager, _cache, _system, NullLogger<WebsiteEnforcer>.Instance, app);
+        await enforcer.RefreshOnceAsync(CancellationToken.None);
+
+        await manager.StopAsync(list.Id, null);
+        await enforcer.RefreshOnceAsync(CancellationToken.None);
+
+        Assert.True(app.Restored);
+    }
+
     /// <summary>Records apply/restore calls so the ModifySystem decision can be asserted.</summary>
     private sealed class RecordingSystemEnforcement : ISystemEnforcement
     {
@@ -235,6 +275,26 @@ public sealed class WebsiteEnforcerTests
         public Task RestoreAsync(CancellationToken ct)
         {
             IsApplied = false;
+            Restored = true;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingAppEnforcement : IAppEnforcement
+    {
+        public int ApplyCount { get; private set; }
+
+        public bool Restored { get; private set; }
+
+        public Task ApplyAsync(RuleSet rules, CancellationToken ct)
+        {
+            ApplyCount++;
+            Restored = false;
+            return Task.CompletedTask;
+        }
+
+        public Task RestoreAsync(CancellationToken ct)
+        {
             Restored = true;
             return Task.CompletedTask;
         }

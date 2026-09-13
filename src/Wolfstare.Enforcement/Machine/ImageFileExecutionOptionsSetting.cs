@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Microsoft.Win32;
 using Wolfstare.Core.Enforcement;
 using Wolfstare.Core.Rules;
@@ -96,6 +98,35 @@ public sealed class ImageFileExecutionOptionsSetting : ISystemSetting
 
         using var target = root.CreateSubKey(path, writable: true);
         target.SetValue(DebuggerValue, _stubPath, RegistryValueKind.String);
+        Harden(target);
+    }
+
+    /// <summary>
+    /// Makes the key hard to delete casually: owned by SYSTEM, with Administrators denied the
+    /// Delete right, so removing it in regedit requires taking ownership first (spec §9,
+    /// raising the cost of a bypass without pretending to be unbreakable).
+    ///
+    /// Only applied when the service is actually running as LocalSystem — the intended
+    /// installed state. Under a merely-elevated Administrator (a dev run), SYSTEM ownership and
+    /// an Administrators deny would lock the service out of its own restore, so it is skipped.
+    /// SYSTEM keeps full control, so the service can always remove the key on restore.
+    /// </summary>
+    private static void Harden(RegistryKey key)
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        if (!identity.IsSystem) return;
+
+        var system = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null);
+        var administrators = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+
+        var security = new RegistrySecurity();
+        security.SetOwner(system);
+        security.AddAccessRule(new RegistryAccessRule(
+            system, RegistryRights.FullControl, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Allow));
+        security.AddAccessRule(new RegistryAccessRule(
+            administrators, RegistryRights.Delete, InheritanceFlags.None, PropagationFlags.None, AccessControlType.Deny));
+
+        key.SetAccessControl(security);
     }
 
     private static void DeleteEmptyKey(RegistryKey root, string path)
