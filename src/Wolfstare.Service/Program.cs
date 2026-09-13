@@ -23,6 +23,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseWindowsService(options => options.ServiceName = "Wolfstare");
 
 var paths = WolfstarePaths.Resolve(builder.Configuration);
+
+// When installed as a service, lock the data directory to SYSTEM + Administrators so a standard
+// user cannot tamper with the block database, integrity key, or token. Skipped for a dev
+// console run so it never locks a non-elevated developer out of their own data.
+if (WindowsServiceHelpers.IsWindowsService())
+{
+    try { DataDirectoryHardening.Harden(paths.RootDirectory); }
+    catch (Exception ex) { Console.Error.WriteLine($"Could not harden the data directory: {ex.Message}"); }
+}
+
 var token = ApiToken.CreateAndPersist(paths);
 
 builder.WebHost.UseUrls($"http://127.0.0.1:{paths.Port}");
