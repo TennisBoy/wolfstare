@@ -165,7 +165,7 @@ public sealed class ApiTests : IClassFixture<WolfstareFactory>
         var client = Client();
         var id = await CreateList(client, "Too short");
 
-        var start = await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText(length: 100));
+        var start = await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText(length: 50));
 
         Assert.Equal(HttpStatusCode.BadRequest, start.StatusCode);
     }

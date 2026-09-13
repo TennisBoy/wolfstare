@@ -8,7 +8,7 @@ interface Props {
   onStarted: () => void;
 }
 
-const MIN_LENGTH = 200;
+const MIN_LENGTH = 100;
 const MAX_LENGTH = 5000;
 const DEFAULT_LENGTH = 500;
 

@@ -16,7 +16,7 @@ namespace Wolfstare.Service.Api;
 public static class ApiEndpoints
 {
     /// <summary>The allowed range for a random-text lock's length, in characters.</summary>
-    public const int RandomTextLockMinLength = 200;
+    public const int RandomTextLockMinLength = 100;
     public const int RandomTextLockMaxLength = 5000;
     private const int RandomTextLockDefaultLength = 500;
 
