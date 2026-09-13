@@ -119,6 +119,17 @@ public sealed class SqliteRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task SessionRoundTripsARandomTextLock()
+    {
+        var text = RandomText.Generate(5000);
+        await Sessions.SaveAsync(NewSession(new RandomTextLock(text), null));
+
+        var loaded = Assert.Single(await Sessions.GetActiveAsync());
+        var reloaded = Assert.IsType<RandomTextLock>(loaded.Lock);
+        Assert.Equal(text, reloaded.RequiredText);
+    }
+
+    [Fact]
     public async Task SessionRoundTripsNoLock()
     {
         await Sessions.SaveAsync(NewSession(new NoLock(), 60));

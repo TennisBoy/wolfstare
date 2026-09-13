@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { BlockListDto, LockKind } from "../api/types";
+import type { BlockListDto } from "../api/types";
 import { api, ApiError, type StartOptions } from "../api/client";
 
 interface Props {
@@ -8,23 +8,23 @@ interface Props {
   onStarted: () => void;
 }
 
+const MIN_LENGTH = 5000;
+
+/// Only one lock exists: a random-text lock of at least 5000 characters. There is deliberately
+/// no weaker option — no timer to wait out, no password to remember your way past. The only way
+/// to end a block through the app is to retype its string by hand.
 export function StartDialog({ list, onClose, onStarted }: Props) {
-  const [lockKind, setLockKind] = useState<LockKind>("timed");
-  const [minutes, setMinutes] = useState(25);
-  const [password, setPassword] = useState("");
+  const [textLength, setTextLength] = useState(MIN_LENGTH);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const needsDuration = lockKind === "timed";
-  const needsPassword = lockKind === "password";
 
   async function start() {
     setError(null);
     setBusy(true);
     try {
       const options: StartOptions = {
-        durationMinutes: needsDuration || lockKind === "none" ? minutes : null,
-        lock: needsPassword ? { kind: "password", password } : { kind: lockKind },
+        durationMinutes: null,
+        lock: { kind: "randomtext", textLength },
       };
       await api.start(list.id, options);
       onStarted();
@@ -40,50 +40,27 @@ export function StartDialog({ list, onClose, onStarted }: Props) {
       <div className="dialog" onClick={(e) => e.stopPropagation()}>
         <h3>Start "{list.name}"</h3>
 
-        <label htmlFor="lock">Lock</label>
-        <select id="lock" value={lockKind} onChange={(e) => setLockKind(e.target.value as LockKind)}>
-          <option value="timed">Timed — cannot be stopped early</option>
-          <option value="password">Password — stop needs the password</option>
-          <option value="none">None — stop any time</option>
-        </select>
+        <label htmlFor="len">Characters to retype to unlock (minimum {MIN_LENGTH})</label>
+        <input
+          id="len"
+          type="number"
+          min={MIN_LENGTH}
+          max={100000}
+          value={textLength}
+          onChange={(e) => setTextLength(Math.max(MIN_LENGTH, Number(e.target.value)))}
+        />
 
-        {(needsDuration || lockKind === "none") && (
-          <>
-            <label htmlFor="mins">Duration (minutes)</label>
-            <input
-              id="mins"
-              type="number"
-              min={1}
-              value={minutes}
-              onChange={(e) => setMinutes(Math.max(1, Number(e.target.value)))}
-            />
-          </>
-        )}
-
-        {needsPassword && (
-          <>
-            <label htmlFor="pw">Password</label>
-            <input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </>
-        )}
-
-        {lockKind === "timed" && (
-          <p className="meta" style={{ marginTop: 12 }}>
-            A timed lock has no early exit — not even with a password. Choose the duration carefully.
-          </p>
-        )}
+        <p className="meta" style={{ marginTop: 12 }}>
+          This block runs until you retype {textLength} random characters exactly, by hand —
+          pasting is disabled. There is no timer and no password: the typing is the only way out
+          through the app.
+        </p>
 
         {error && <div className="error">{error}</div>}
 
         <div className="dialog-actions">
           <button onClick={onClose} disabled={busy}>Cancel</button>
-          <button
-            className="primary"
-            onClick={start}
-            disabled={busy || (needsPassword && password.length === 0)}
-          >
-            Start
-          </button>
+          <button className="primary" onClick={start} disabled={busy}>Start</button>
         </div>
       </div>
     </div>

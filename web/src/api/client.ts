@@ -47,7 +47,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export interface StartOptions {
   durationMinutes: number | null;
-  lock: { kind: "none" | "password" | "timed"; password?: string };
+  lock: {
+    kind: "none" | "password" | "timed" | "randomtext";
+    password?: string;
+    textLength?: number;
+  };
 }
 
 export const api = {

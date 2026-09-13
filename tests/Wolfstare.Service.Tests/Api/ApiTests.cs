@@ -13,9 +13,9 @@ namespace Wolfstare.Service.Tests.Api;
 /// <summary>
 /// End-to-end tests over the real HTTP surface.
 ///
-/// The load-bearing cases are the 423s: a timed session must be immune to <c>stop</c>,
-/// <c>unlock</c>, <c>PUT</c>, and <c>DELETE</c> alike. If any one of those ends it, the
-/// application's only guarantee is gone.
+/// The load-bearing rule: only a random-text lock can be created, and it can be ended only by
+/// retyping its text. The weaker lock kinds are refused, and a locked list cannot be edited or
+/// deleted out from under the lock.
 /// </summary>
 public sealed class ApiTests : IClassFixture<WolfstareFactory>
 {
@@ -42,6 +42,9 @@ public sealed class ApiTests : IClassFixture<WolfstareFactory>
         var created = await response.Content.ReadFromJsonAsync<BlockListDto>();
         return created!.Id;
     }
+
+    private static StartSessionRequest RandomText(int length = 5000)
+        => new(null, new LockDto("randomtext", null, length));
 
     // ---- authentication ----
 
@@ -128,44 +131,42 @@ public sealed class ApiTests : IClassFixture<WolfstareFactory>
         Assert.Equal("domain", Assert.Single(list.Rules).Kind);
     }
 
-    // ---- the 423 surface ----
+    // ---- only random-text locks may be created ----
 
-    [Fact]
-    public async Task TimedSessionCannotBeStopped()
+    [Theory]
+    [InlineData("none")]
+    [InlineData("timed")]
+    [InlineData("password")]
+    public async Task WeakerLockKindsAreRefused(string kind)
     {
         var client = Client();
-        var id = await CreateList(client, "Timed stop");
+        var id = await CreateList(client, $"Reject {kind}");
 
         var start = await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto("timed", null)));
-        start.EnsureSuccessStatusCode();
+            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto(kind, "pw")));
 
-        var stop = await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/stop", new StopSessionRequest(null));
-
-        Assert.Equal(HttpStatusCode.Locked, stop.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, start.StatusCode);
     }
 
     [Fact]
-    public async Task TimedSessionCannotBeUnlockedWithAPassword()
+    public async Task ARandomTextLockBelowTheMinimumIsRefused()
     {
         var client = Client();
-        var id = await CreateList(client, "Timed unlock");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto("timed", null)));
+        var id = await CreateList(client, "Too short");
 
-        var unlock = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, "please"));
+        var start = await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText(length: 100));
 
-        Assert.Equal(HttpStatusCode.Locked, unlock.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, start.StatusCode);
     }
 
+    // ---- a locked list cannot be modified out from under the lock ----
+
     [Fact]
-    public async Task BlockListWithATimedSessionCannotBeEdited()
+    public async Task BlockListWithARandomTextSessionCannotBeEdited()
     {
         var client = Client();
-        var id = await CreateList(client, "Timed edit");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto("timed", null)));
+        var id = await CreateList(client, "Locked edit");
+        (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
 
         var update = await client.PutAsJsonAsync($"/api/blocklists/{id}", NewList("Renamed"));
 
@@ -173,116 +174,69 @@ public sealed class ApiTests : IClassFixture<WolfstareFactory>
     }
 
     [Fact]
-    public async Task BlockListWithATimedSessionCannotBeDeleted()
+    public async Task BlockListWithARandomTextSessionCannotBeDeleted()
     {
         var client = Client();
-        var id = await CreateList(client, "Timed delete");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto("timed", null)));
+        var id = await CreateList(client, "Locked delete");
+        (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
 
         var delete = await client.DeleteAsync($"/api/blocklists/{id}");
 
         Assert.Equal(HttpStatusCode.Locked, delete.StatusCode);
     }
 
-    [Fact]
-    public async Task TimedLockWithoutADurationIsRefused()
-    {
-        var client = Client();
-        var id = await CreateList(client, "No duration");
-
-        var start = await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(null, new LockDto("timed", null)));
-
-        Assert.Equal(HttpStatusCode.BadRequest, start.StatusCode);
-    }
-
-    // ---- password locks ----
-
-    [Fact]
-    public async Task PasswordSessionRejectsTheWrongPassword()
-    {
-        var client = Client();
-        var id = await CreateList(client, "Password wrong");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(null, new LockDto("password", "hunter2")));
-
-        var unlock = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, "wrong"));
-
-        Assert.Equal(HttpStatusCode.Unauthorized, unlock.StatusCode);
-    }
-
-    [Fact]
-    public async Task PasswordSessionAcceptsTheCorrectPassword()
-    {
-        var client = Client();
-        var id = await CreateList(client, "Password right");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(null, new LockDto("password", "hunter2")));
-
-        var unlock = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, "hunter2"));
-
-        Assert.Equal(HttpStatusCode.OK, unlock.StatusCode);
-    }
-
-    [Fact]
-    public async Task PasswordLockWithoutAPasswordIsRefused()
-    {
-        var client = Client();
-        var id = await CreateList(client, "Password missing");
-
-        var start = await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(null, new LockDto("password", null)));
-
-        Assert.Equal(HttpStatusCode.BadRequest, start.StatusCode);
-    }
-
-    // ---- unlocked sessions ----
-
-    [Fact]
-    public async Task UnlockedSessionCanBeStoppedAndTheListEdited()
-    {
-        var client = Client();
-        var id = await CreateList(client, "Unlocked");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto("none", null)));
-
-        var stop = await client.PostAsJsonAsync($"/api/blocklists/{id}/stop", new StopSessionRequest(null));
-        Assert.Equal(HttpStatusCode.OK, stop.StatusCode);
-
-        var update = await client.PutAsJsonAsync($"/api/blocklists/{id}", NewList("Renamed"));
-        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
-    }
+    // ---- sessions ----
 
     [Fact]
     public async Task StartingASecondSessionForTheSameListConflicts()
     {
         var client = Client();
         var id = await CreateList(client, "Double start");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto("none", null)));
+        (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
 
-        var second = await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(60, new LockDto("none", null)));
+        var second = await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText());
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
     [Fact]
-    public async Task ActiveSessionAppearsInStatusWithRemainingTime()
+    public async Task ActiveSessionAppearsInStatusAsAnIndefiniteRandomTextLock()
     {
         var client = Client();
         var id = await CreateList(client, "Status check");
-        await client.PostAsJsonAsync(
-            $"/api/blocklists/{id}/start", new StartSessionRequest(45, new LockDto("timed", null)));
+        (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
 
         var status = await client.GetFromJsonAsync<StatusDto>("/api/status");
 
         var session = Assert.Single(status!.ActiveSessions, s => s.BlockListId == id);
-        Assert.Equal("timed", session.LockKind);
+        Assert.Equal("randomtext", session.LockKind);
         Assert.Equal("Status check", session.BlockListName);
+        Assert.Null(session.RemainingSeconds);        // indefinite — ends only on retype
         Assert.False(session.CanBeStopped);
-        Assert.InRange(session.RemainingSeconds!.Value, 2699, 2700);
+    }
+
+    [Fact]
+    public async Task RandomTextLockExposesTheTextAndUnlocksOnlyOnAnExactRetype()
+    {
+        var client = Client();
+        var id = await CreateList(client, "Random text");
+
+        (await client.PostAsJsonAsync($"/api/blocklists/{id}/start", RandomText())).EnsureSuccessStatusCode();
+
+        // The status exposes the text to retype (it is not a secret).
+        var status = await client.GetFromJsonAsync<StatusDto>("/api/status");
+        var session = Assert.Single(status!.ActiveSessions, s => s.BlockListId == id);
+        Assert.Equal("randomtext", session.LockKind);
+        Assert.NotNull(session.UnlockText);
+        Assert.Equal(5000, session.UnlockText!.Length);
+
+        // Wrong text is refused.
+        var wrong = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, session.UnlockText + "x"));
+        Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+
+        // The exact text ends it.
+        var right = await client.PostAsJsonAsync("/api/unlock", new UnlockRequest(id, session.UnlockText));
+        Assert.Equal(HttpStatusCode.OK, right.StatusCode);
     }
 
     [Fact]

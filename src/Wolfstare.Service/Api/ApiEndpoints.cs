@@ -15,6 +15,9 @@ namespace Wolfstare.Service.Api;
 /// </summary>
 public static class ApiEndpoints
 {
+    /// <summary>The floor on a random-text lock. A block below this offers too little friction to matter.</summary>
+    public const int RandomTextLockMinLength = 5000;
+
     public static void MapWolfstareApi(this IEndpointRouteBuilder app)
     {
         var api = app.MapGroup("/api");
@@ -53,7 +56,8 @@ public static class ApiEndpoints
                 LockKindOf(session.Lock),
                 session.RemainingSeconds(),
                 session.Timing.ElapsedSeconds,
-                CanBeStopped: session.Lock is NoLock || session.IsExpired()));
+                CanBeStopped: session.Lock is NoLock || session.IsExpired(),
+                UnlockText: session.Lock is RandomTextLock r ? r.RequiredText : null));
         }
 
         // Health reflects the enforcement subsystems: "ok", or "degraded" with a reason the UI
@@ -118,31 +122,25 @@ public static class ApiEndpoints
         Guid id,
         StartSessionRequest request,
         SessionManager manager,
-        IPasswordHasher hasher,
         Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
         CancellationToken ct)
     {
-        SessionLock sessionLock;
-        switch (request.Lock.Kind)
-        {
-            case "none":
-                sessionLock = new NoLock();
-                break;
+        // Only random-text locks may be created. The easier lock kinds (none / password /
+        // timed) are deliberately refused — they are the "back doors" a weaker block would
+        // offer, so a block can only ever be escaped by retyping the string. The domain still
+        // understands the other kinds (for existing sessions and the tests that cover their
+        // semantics); they simply cannot be started here.
+        if (request.Lock.Kind != "randomtext")
+            return Results.BadRequest(new ErrorDto(
+                "Only random-text locks are allowed. There is no weaker lock to fall back on — "
+                + "a block can only be ended by retyping its text."));
 
-            case "timed":
-                sessionLock = new TimedLock();
-                break;
+        var length = request.Lock.TextLength ?? RandomTextLockMinLength;
+        if (length < RandomTextLockMinLength || length > 100_000)
+            return Results.BadRequest(new ErrorDto(
+                $"Random-text length must be between {RandomTextLockMinLength} and 100000 characters."));
 
-            case "password":
-                if (string.IsNullOrWhiteSpace(request.Lock.Password))
-                    return Results.BadRequest(new ErrorDto("A password lock requires a password."));
-                sessionLock = new PasswordLock(hasher.Create(request.Lock.Password));
-                break;
-
-            default:
-                return Results.BadRequest(
-                    new ErrorDto($"Unknown lock kind '{request.Lock.Kind}'. Use none, password, or timed."));
-        }
+        SessionLock sessionLock = new RandomTextLock(RandomText.Generate(length));
 
         var duration = request.DurationMinutes is { } minutes ? minutes * 60 : (long?)null;
         if (duration is <= 0)
@@ -260,6 +258,7 @@ public static class ApiEndpoints
         NoLock => "none",
         PasswordLock => "password",
         TimedLock => "timed",
+        RandomTextLock => "randomtext",
         _ => "unknown",
     };
 }

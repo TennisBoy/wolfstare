@@ -47,6 +47,14 @@ public static class StopPolicy
                 ? StopOutcome.Allowed
                 : StopOutcome.PasswordIncorrect,
 
+            // The required text is shown to the user, so this is friction not secrecy: an exact,
+            // case-sensitive retype ends it. No time gate — you can escape any time you are
+            // willing to type the whole string.
+            RandomTextLock when password is null => StopOutcome.PasswordRequired,
+            RandomTextLock l => string.Equals(l.RequiredText, password, StringComparison.Ordinal)
+                ? StopOutcome.Allowed
+                : StopOutcome.PasswordIncorrect,
+
             // Fail closed on an unrecognised lock type rather than defaulting to open.
             _ => StopOutcome.Locked,
         };

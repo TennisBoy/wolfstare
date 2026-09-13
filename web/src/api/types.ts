@@ -18,7 +18,7 @@ export interface BlockListDto {
   allowlist: RuleDto[];
 }
 
-export type LockKind = "none" | "password" | "timed";
+export type LockKind = "none" | "password" | "timed" | "randomtext";
 
 export interface ActiveSessionDto {
   id: string;
@@ -28,6 +28,7 @@ export interface ActiveSessionDto {
   remainingSeconds: number | null;
   elapsedSeconds: number;
   canBeStopped: boolean;
+  unlockText: string | null;
 }
 
 export interface StatusDto {

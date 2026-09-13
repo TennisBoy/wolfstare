@@ -70,6 +70,7 @@ export function App() {
                 <div className="meta">
                   {session.lockKind === "timed" && <span className="locked-badge">timed lock</span>}{" "}
                   {session.lockKind === "password" && <span className="locked-badge">password</span>}{" "}
+                  {session.lockKind === "randomtext" && <span className="locked-badge">retype to stop</span>}{" "}
                   {session.remainingSeconds === null ? "running" : "remaining"}
                 </div>
               </div>

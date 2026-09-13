@@ -20,3 +20,10 @@ public sealed record PasswordLock(PasswordHash Hash) : SessionLock;
 /// that removal being visible in a diff.
 /// </summary>
 public sealed record TimedLock : SessionLock;
+
+/// <summary>
+/// Stopping requires retyping a long random string, shown to the user. Unlike a password the
+/// text is not secret — the friction of typing it exactly is the entire deterrent (Cold
+/// Turkey's "random text" lock). Case-sensitive, exact match.
+/// </summary>
+public sealed record RandomTextLock(string RequiredText) : SessionLock;

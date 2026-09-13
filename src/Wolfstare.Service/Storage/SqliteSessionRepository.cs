@@ -26,6 +26,7 @@ public sealed class SqliteSessionRepository(
     private const string LockNone = "none";
     private const string LockPassword = "password";
     private const string LockTimed = "timed";
+    private const string LockRandomText = "randomtext";
 
     public async Task<IReadOnlyList<BlockSession>> GetActiveAsync(CancellationToken ct = default)
     {
@@ -35,7 +36,7 @@ public sealed class SqliteSessionRepository(
             """
             SELECT id, block_list_id, lock_kind, lock_hash, lock_salt, lock_iterations,
                    started_at_utc, elapsed_seconds, checkpoint_wall_utc,
-                   checkpoint_monotonic_ms, duration_seconds, integrity_mac
+                   checkpoint_monotonic_ms, duration_seconds, integrity_mac, lock_text
             FROM sessions;
             """;
 
@@ -71,10 +72,10 @@ public sealed class SqliteSessionRepository(
             INSERT INTO sessions (
                 id, block_list_id, lock_kind, lock_hash, lock_salt, lock_iterations,
                 started_at_utc, elapsed_seconds, checkpoint_wall_utc,
-                checkpoint_monotonic_ms, duration_seconds, integrity_mac)
+                checkpoint_monotonic_ms, duration_seconds, integrity_mac, lock_text)
             VALUES (
                 $id, $blockListId, $lockKind, $lockHash, $lockSalt, $lockIterations,
-                $startedAt, $elapsed, $checkpointWall, $checkpointMonotonic, $duration, $mac)
+                $startedAt, $elapsed, $checkpointWall, $checkpointMonotonic, $duration, $mac, $lockText)
             ON CONFLICT(id) DO UPDATE SET
                 elapsed_seconds = excluded.elapsed_seconds,
                 checkpoint_wall_utc = excluded.checkpoint_wall_utc,
@@ -85,11 +86,12 @@ public sealed class SqliteSessionRepository(
         command.Parameters.AddWithValue("$id", session.Id.ToString());
         command.Parameters.AddWithValue("$blockListId", session.BlockListId.ToString());
 
-        var (kind, hash) = Describe(session.Lock);
+        var (kind, hash, text) = Describe(session.Lock);
         command.Parameters.AddWithValue("$lockKind", kind);
         command.Parameters.AddWithValue("$lockHash", (object?)hash?.Hash ?? DBNull.Value);
         command.Parameters.AddWithValue("$lockSalt", (object?)hash?.Salt ?? DBNull.Value);
         command.Parameters.AddWithValue("$lockIterations", (object?)hash?.Iterations ?? DBNull.Value);
+        command.Parameters.AddWithValue("$lockText", (object?)text ?? DBNull.Value);
 
         command.Parameters.AddWithValue("$startedAt", Format(session.Timing.StartedAtUtc));
         command.Parameters.AddWithValue("$elapsed", session.Timing.ElapsedSeconds);
@@ -113,11 +115,12 @@ public sealed class SqliteSessionRepository(
         await command.ExecuteNonQueryAsync(ct);
     }
 
-    private static (string Kind, PasswordHash? Hash) Describe(SessionLock sessionLock) => sessionLock switch
+    private static (string Kind, PasswordHash? Hash, string? Text) Describe(SessionLock sessionLock) => sessionLock switch
     {
-        NoLock => (LockNone, null),
-        PasswordLock l => (LockPassword, l.Hash),
-        TimedLock => (LockTimed, null),
+        NoLock => (LockNone, null, null),
+        PasswordLock l => (LockPassword, l.Hash, null),
+        TimedLock => (LockTimed, null, null),
+        RandomTextLock l => (LockRandomText, null, l.RequiredText),
         _ => throw new InvalidDataException($"Cannot serialise lock type '{sessionLock.GetType().Name}'."),
     };
 
@@ -131,6 +134,7 @@ public sealed class SqliteSessionRepository(
             LockTimed => new TimedLock(),
             LockPassword => new PasswordLock(new PasswordHash(
                 (byte[])reader.GetValue(3), (byte[])reader.GetValue(4), reader.GetInt32(5))),
+            LockRandomText => new RandomTextLock(reader.IsDBNull(12) ? string.Empty : reader.GetString(12)),
 
             // Fail closed: an unreadable lock must not degrade into an unlocked session.
             _ => throw new InvalidDataException(

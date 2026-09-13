@@ -53,6 +53,9 @@ public static class SessionIntegrity
             NoLock => ("none", ""),
             TimedLock => ("timed", ""),
             PasswordLock l => ("password", $"{Convert.ToBase64String(l.Hash.Hash)}:{Convert.ToBase64String(l.Hash.Salt)}:{l.Hash.Iterations}"),
+            // The required text is signed, so editing the database to a shorter string you'd
+            // rather type is caught.
+            RandomTextLock l => ("randomtext", l.RequiredText),
             _ => ("unknown", ""),
         };
 
