@@ -38,5 +38,11 @@ public static class DataDirectoryHardening
             administrators, FileSystemRights.FullControl, inherit, PropagationFlags.None, AccessControlType.Allow));
 
         new DirectoryInfo(directory).SetAccessControl(security);
+
+        // Note: this locks everything under the data directory, so no user-launched executable
+        // may live here. The block stub — which IFEO launches in the standard user's context —
+        // is installed to a world-runnable location (Program Files) instead, referenced by
+        // Wolfstare:Enforcement:StubPath. Keep it that way, or a blocked launch fails with a raw
+        // "access denied" instead of showing the block screen.
     }
 }

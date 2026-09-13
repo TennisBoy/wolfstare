@@ -26,4 +26,11 @@ public sealed class EnforcementOptions
 
     /// <summary>Fallback resolvers, used only if the machine's own could not be captured.</summary>
     public IReadOnlyList<string> Upstreams { get; init; } = ["1.1.1.1", "8.8.8.8"];
+
+    /// <summary>
+    /// Full path to the block stub. Must be a world-runnable location (e.g. Program Files) so a
+    /// standard user's blocked launch can execute it and see the block screen. Defaults to the
+    /// stub next to the service executable when unset (fine for dev; the installer sets it).
+    /// </summary>
+    public string? StubPath { get; init; }
 }

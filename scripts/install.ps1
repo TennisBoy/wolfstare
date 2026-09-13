@@ -30,15 +30,21 @@ try {
     Pop-Location
 }
 
+# The block stub goes to a world-runnable location, NOT the locked data directory: a standard
+# user's blocked launch (via IFEO) must be able to execute it to see the block screen.
+$stubDir = Join-Path $env:ProgramFiles "Wolfstare"
+$stubPath = Join-Path $stubDir "Wolfstare.BlockStub.exe"
+
 Write-Host "Publishing Wolfstare ($Configuration)..."
 dotnet publish (Join-Path $repoRoot "src\Wolfstare.Service") -c $Configuration -o $installDir
-dotnet publish (Join-Path $repoRoot "src\Wolfstare.BlockStub") -c $Configuration -o $installDir
+dotnet publish (Join-Path $repoRoot "src\Wolfstare.BlockStub") -c $Configuration -o $stubDir
 
-# Turn on system modification for the installed service (off by default everywhere else).
+# Turn on system modification and point enforcement at the world-runnable stub.
 $appsettings = Join-Path $installDir "appsettings.Production.json"
-@'
-{ "Wolfstare": { "Enforcement": { "ModifySystem": true } } }
-'@ | Set-Content -Path $appsettings -Encoding utf8
+$stubJson = $stubPath -replace '\\', '\\'
+@"
+{ "Wolfstare": { "Enforcement": { "ModifySystem": true, "StubPath": "$stubJson" } } }
+"@ | Set-Content -Path $appsettings -Encoding utf8
 
 $exe = Join-Path $installDir "Wolfstare.Service.exe"
 Write-Host "Registering the service..."

@@ -42,7 +42,7 @@ public static class EnforcementFactory
 
         return new WindowsAppEnforcement(
             Mutator(services, paths, options),
-            StubPath(),
+            StubPath(options),
             services.GetRequiredService<ILogger<WindowsAppEnforcement>>());
     }
 
@@ -79,7 +79,7 @@ public static class EnforcementFactory
         var resolver = new SystemSettingResolver(
             services.GetRequiredService<IProcessRunner>(),
             ProxyServer(options),
-            StubPath(),
+            StubPath(options),
             ServiceExePath(),
             CurrentUserSid());
 
@@ -93,7 +93,8 @@ public static class EnforcementFactory
 
     private static string ServiceExePath() => Environment.ProcessPath ?? "Wolfstare.Service.exe";
 
-    private static string StubPath() => Path.Combine(AppContext.BaseDirectory, "Wolfstare.BlockStub.exe");
+    private static string StubPath(EnforcementOptions options)
+        => options.StubPath ?? Path.Combine(AppContext.BaseDirectory, "Wolfstare.BlockStub.exe");
 
     /// <summary>
     /// The interactive user's SID. Running as LocalSystem this is the service account, which is
