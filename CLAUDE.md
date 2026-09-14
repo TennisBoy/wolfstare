@@ -16,7 +16,7 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite (309 tests)
+dotnet test                                    # full suite (326 tests)
 cd web && npm run build                        # build the UI into the service's wwwroot
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace
@@ -50,6 +50,15 @@ To drive the running API, read the bearer token the service writes on each start
 $t = Get-Content "$env:ProgramData\Wolfstare\api.token" -Raw
 Invoke-RestMethod http://127.0.0.1:8437/api/status -Headers @{Authorization="Bearer $t"}
 ```
+
+`api.token` is ACL'd to SYSTEM + Administrators, so an elevated shell can read it but a
+standard-user one cannot. The same token is injected into the served `index.html` as a
+`<meta name="wolfstare-token">` — scrape that when you can't read the file.
+
+Elevated one-off operations (reset, reinstall, registry surgery) go through
+`Start-Process -Verb RunAs` with a `-File` script that writes a log file. Always confirm the
+UAC prompt was actually approved by checking the log file exists — a dismissed prompt fails
+silently, and the script simply never ran.
 
 For a throwaway instance, override the data directory and port:
 `-- --Wolfstare:DataDirectory=C:/temp/wolf --Wolfstare:Port=8437`
@@ -130,6 +139,15 @@ Authenticode reading (`ProcessInspector`) sees only **embedded** signatures, not
 That's correct for the target: third-party apps embed their signatures; catalog-signed OS
 binaries are Microsoft-published and already barred from blocking.
 
+**App enforcement reconciles every tick, not on an engage edge.** `WindowsAppEnforcement.ApplyAsync`
+makes the IFEO redirects match the active rules exactly: it writes missing ones (self-heals a
+deleted key) and removes any redirect Wolfstare owns that no active block calls for. It finds its
+own redirects by their Debugger value pointing at the stub (`RedirectedTo`), not a journal or
+flag, so orphans self-clear within a refresh interval across restarts and crashes. Edge-triggering
+this — the old model — is what stranded an app as blocked with no session to unlock; don't
+reintroduce it. `WebsiteEnforcer.RefreshOnceAsync` therefore calls `_app.ApplyAsync` on every
+tick unconditionally, while the website half stays edge-triggered via `_websiteEngaged`.
+
 ### Service, integrity, and the UI
 
 The service hosts under the SCM via `UseWindowsService()` and runs as a console app otherwise,
@@ -169,6 +187,18 @@ spec §5.3.
 **Timed locks have no early exit** (`Sessions/StopPolicy.cs`). `TimedLock` is an empty record
 and `StopPolicy` has no password branch for it. The absence is the feature: adding an escape
 hatch would have to show up in a diff rather than hiding in a config flag.
+
+**The domain supports four lock types; the API only lets you create one.** `StopPolicy` and
+`SessionLock` still cover `NoLock`, `TimedLock`, `PasswordLock`, and `RandomTextLock` (which is
+why the clock-tamper and integrity machinery above still matters). But the create endpoint
+refuses anything but `"randomtext"` with a 400 — the user chose random-text as the *only* lock.
+The challenge is a run of whole words (`RandomText.Generate`, grade-12 vocabulary), 100–5000
+chars (`RandomTextLockMin/MaxLength`, packed up to the target so 3888 requested yields ~3885),
+and it is served **only** as a PNG (`/blocklists/{id}/unlock-image`) — never as text. `/api/status`
+returns `UnlockTextLength`, not the string. The PNG-only path is deliberate: text in the API
+response would be trivially scriptable, and even the image is word-wrapped at word boundaries so
+a screenshot-to-OCR round-trip is the least-friction bypass, not a one-liner. Unlocking is a
+case-sensitive exact retype (`StringComparison.Ordinal`), no time gate.
 
 ### `SessionManager` is the only mutator
 
