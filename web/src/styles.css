@@ -103,9 +103,14 @@ label { display: block; font-size: 0.85rem; color: var(--muted); margin: 8px 0 3
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);
   display: grid; place-items: center; padding: 16px;
 }
-.dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; width: min(28rem, 100%); }
+.dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px; width: min(28rem, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
 .dialog h3 { margin-top: 0; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+/* A long random-text challenge renders as a very tall image; box it so the retype field and
+   the Stop button below it stay on screen instead of being pushed past the viewport. */
+.challenge-image { max-height: 45vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.challenge-image img { display: block; width: 100%; }
 
 .empty { color: var(--muted); font-style: italic; }
 .add-rule { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }

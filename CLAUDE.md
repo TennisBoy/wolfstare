@@ -16,7 +16,7 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite (326 tests)
+dotnet test                                    # full suite (327 tests)
 cd web && npm run build                        # build the UI into the service's wwwroot
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace

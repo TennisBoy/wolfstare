@@ -84,8 +84,9 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
           <>
             <label>Retype this exactly ({expectedLength} characters) — no pasting</label>
             {imageUrl
-              ? <img src={imageUrl} alt="" draggable={false} onContextMenu={block}
-                     style={{ width: "100%", border: "1px solid var(--border)", borderRadius: 6 }} />
+              ? <div className="challenge-image">
+                  <img src={imageUrl} alt="" draggable={false} onContextMenu={block} />
+                </div>
               : <div className="meta">Loading…</div>}
             <label htmlFor="retype">Your entry</label>
             <textarea

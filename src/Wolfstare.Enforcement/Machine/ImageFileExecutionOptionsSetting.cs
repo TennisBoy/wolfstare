@@ -127,11 +127,23 @@ public sealed class ImageFileExecutionOptionsSetting : ISystemSetting
 
             key.DeleteValue(DebuggerValue, throwOnMissingValue: false);
 
-            // Remove the key entirely if we left it empty, so a restored machine has no trace.
+            // Removing the Debugger value is what lifts the block; anything past this point is
+            // cosmetic. Remove the now-empty key so a restored machine carries no trace — but a
+            // blocked key is hardened (owner SYSTEM, Administrators denied Delete), and an empty
+            // IFEO key does nothing anyway, so failing to delete it must never throw out of a
+            // successful removal (that once surfaced as a 500 on an unlock that had actually
+            // worked). Best effort only.
             if (key.ValueCount == 0 && key.SubKeyCount == 0)
             {
                 key.Dispose();
-                DeleteEmptyKey(root, path);
+                try
+                {
+                    DeleteEmptyKey(root, path);
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException)
+                {
+                    // The redirect is already gone; a leftover empty key is inert.
+                }
             }
 
             return;

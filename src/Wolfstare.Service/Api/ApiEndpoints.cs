@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Wolfstare.Contracts;
 using Wolfstare.Core.Rules;
 using Wolfstare.Core.Sessions;
@@ -126,6 +127,7 @@ public static class ApiEndpoints
         StartSessionRequest request,
         SessionManager manager,
         Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         // Only random-text locks may be created. The easier lock kinds (none / password /
@@ -152,7 +154,7 @@ public static class ApiEndpoints
         var result = await manager.StartAsync(new SessionStartRequest(id, duration, sessionLock), ct);
 
         if (result.Failure == StartFailure.None)
-            await refresh.RefreshNowAsync(ct);
+            await SafeRefreshAsync(refresh, loggerFactory, ct);
 
         return result.Failure switch
         {
@@ -188,10 +190,11 @@ public static class ApiEndpoints
         StopSessionRequest? request,
         SessionManager manager,
         Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         var outcome = await manager.StopAsync(id, request?.Password, ct);
-        if (outcome == StopOutcome.Allowed) await refresh.RefreshNowAsync(ct);
+        if (outcome == StopOutcome.Allowed) await SafeRefreshAsync(refresh, loggerFactory, ct);
         return Translate(outcome, await Remaining(id, manager, ct));
     }
 
@@ -199,11 +202,35 @@ public static class ApiEndpoints
         UnlockRequest request,
         SessionManager manager,
         Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         var outcome = await manager.StopAsync(request.BlockListId, request.Password, ct);
-        if (outcome == StopOutcome.Allowed) await refresh.RefreshNowAsync(ct);
+        if (outcome == StopOutcome.Allowed) await SafeRefreshAsync(refresh, loggerFactory, ct);
         return Translate(outcome, await Remaining(request.BlockListId, manager, ct));
+    }
+
+    /// <summary>
+    /// Kicks enforcement to reconcile immediately after a session change, but never lets that
+    /// failing turn an already-committed change into an error to the caller. By the time this
+    /// runs the session has already been started or stopped in the domain; the background loop
+    /// reconciles enforcement every tick, so a transient failure here (for example tearing down
+    /// a hardened IFEO key) is caught up within a refresh interval. Returning 500 instead would
+    /// tell the user their unlock failed after it succeeded — and the session is already gone, so
+    /// there would be nothing left to retry against.
+    /// </summary>
+    private static async Task SafeRefreshAsync(
+        Wolfstare.Service.Enforcement.IEnforcementRefresh refresh, ILoggerFactory loggerFactory, CancellationToken ct)
+    {
+        try
+        {
+            await refresh.RefreshNowAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            loggerFactory.CreateLogger("Wolfstare.Api.EnforcementRefresh").LogError(
+                ex, "Immediate enforcement refresh after a session change failed; the periodic reconcile will retry.");
+        }
     }
 
     /// <summary>
