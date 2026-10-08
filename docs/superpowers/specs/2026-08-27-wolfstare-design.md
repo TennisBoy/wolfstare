@@ -8,8 +8,8 @@
 
 ## 1. Overview
 
-Wolfstare is a local, bypass-resistant website and application blocker in the spirit of
-Cold Turkey Blocker. A Windows service running as `LocalSystem` owns all enforcement and
+Wolfstare is a local, bypass-resistant website and application blocker for Windows.
+A Windows service running as `LocalSystem` owns all enforcement and
 all authority; a browser-based UI and a CLI are thin clients over a documented local HTTP API.
 
 ### 1.1 Goals
@@ -442,7 +442,7 @@ the CLI, tamper resistance per §9, and reversible system mutation.
 ### 14.2 Deferred to v2
 
 Schedules (recurring weekly blocks), statistics and time tracking, allowance and
-pomodoro-style breaks, "Frozen Turkey" whole-computer lockout, path-level URL rules and the
+pomodoro-style breaks, whole-computer lockout, path-level URL rules and the
 HTTPS inspection they require, random-text unlock, and multiple simultaneous named sessions
 beyond one per list.
 

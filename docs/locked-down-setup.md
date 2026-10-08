@@ -1,7 +1,6 @@
 # Locked-down setup — making blocks genuinely unbypassable
 
-Wolfstare can't be made admin-proof (see the threat model in the design spec §2 — and note that
-Cold Turkey isn't admin-proof either). But it **can** be made unbypassable by anyone who is *not*
+Wolfstare can't be made admin-proof (see the threat model in the design spec §2). But it **can** be made unbypassable by anyone who is *not*
 a local administrator. The trick isn't a driver — it's not handing the blocked person admin
 rights.
 

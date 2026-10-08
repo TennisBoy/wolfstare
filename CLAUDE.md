@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Wolfstare is a bypass-resistant website and application blocker for Windows, modelled on Cold
-Turkey Blocker. A Windows service running as `LocalSystem` owns all enforcement and all
+Wolfstare is a bypass-resistant website and application blocker for Windows. A Windows
+service running as `LocalSystem` owns all enforcement and all
 authority; the browser UI and CLI are thin clients over a local HTTP API.
 
 Read `docs/superpowers/specs/2026-08-27-wolfstare-design.md` before making architectural
