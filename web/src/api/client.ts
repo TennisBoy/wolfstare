@@ -16,6 +16,10 @@ export class ApiError extends Error {
     readonly status: number,
     message: string,
     readonly remainingSeconds?: number,
+    // A refused random-text retype: where it first went wrong (401), and how long until the
+    // next attempt is accepted (401 and 429).
+    readonly mismatchIndex?: number,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
   }
@@ -37,6 +41,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       response.status,
       payload.message ?? `Request failed (${response.status}).`,
       payload.remainingSeconds,
+      payload.mismatchIndex ?? undefined,
+      payload.retryAfterSeconds ?? undefined,
     );
   }
 

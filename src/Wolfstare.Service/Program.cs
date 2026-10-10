@@ -55,6 +55,7 @@ builder.Services.AddSingleton<IMutationJournal, SqliteMutationJournal>();
 builder.Services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.AddSingleton<SessionManager>();
+builder.Services.AddSingleton(sp => new UnlockThrottle(sp.GetRequiredService<IClock>(), TimeSpan.FromSeconds(5)));
 builder.Services.AddSingleton(new LocalApiGuard(token));
 builder.Services.AddHostedService<SessionTicker>();
 

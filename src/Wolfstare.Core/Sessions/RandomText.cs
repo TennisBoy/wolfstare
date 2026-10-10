@@ -155,4 +155,25 @@ public static class RandomText
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// The index of the first character where <paramref name="attempt"/> differs from
+    /// <paramref name="required"/> (ordinal, case-sensitive), or null if they match exactly. A
+    /// short attempt is wrong where it ends; a long one at its first extra character.
+    ///
+    /// Only the first mismatch, never all of them: every-position feedback would let a script
+    /// recover the whole text with one guess per letter of the alphabet. Even this much is an
+    /// oracle, which is why the API pairs it with <see cref="UnlockThrottle"/>. This explains a
+    /// refusal; it never decides one — that stays with <see cref="StopPolicy"/>.
+    /// </summary>
+    public static int? FirstMismatchIndex(string required, string attempt)
+    {
+        var common = Math.Min(required.Length, attempt.Length);
+        for (var i = 0; i < common; i++)
+        {
+            if (required[i] != attempt[i]) return i;
+        }
+
+        return required.Length == attempt.Length ? null : common;
+    }
 }

@@ -49,3 +49,10 @@ public sealed record StatusDto(
     string Health);
 
 public sealed record ErrorDto(string Message);
+
+/// <summary>
+/// A refused random-text retype. On 401, <see cref="MismatchIndex"/> is the zero-based position of
+/// the first wrong character. On 429 the attempt was not evaluated, so it is null. Either way
+/// <see cref="RetryAfterSeconds"/> is how long until the next attempt is accepted.
+/// </summary>
+public sealed record UnlockRefusedDto(string Message, int? MismatchIndex, int? RetryAfterSeconds);

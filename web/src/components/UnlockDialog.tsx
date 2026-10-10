@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActiveSessionDto } from "../api/types";
 import { api, ApiError } from "../api/client";
 import { formatDuration } from "../format";
@@ -17,6 +17,27 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Where a refused retype first went wrong. The server reports only the first wrong position,
+  // never the expected character — that stays in the image.
+  const [mismatch, setMismatch] = useState<number | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+  const retypeRef = useRef<HTMLTextAreaElement>(null);
+
+  // Count down the server's cooldown so Stop re-enables when it will be accepted.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  // Select the wrong character in the entry: that highlights it, scrolls it into view, and
+  // typing the right one replaces it.
+  useEffect(() => {
+    const box = retypeRef.current;
+    if (mismatch === null || !box) return;
+    box.focus();
+    box.setSelectionRange(mismatch, mismatch + 1);
+  }, [mismatch]);
 
   const isPassword = session.lockKind === "password";
   const isRandomText = session.lockKind === "randomtext";
@@ -34,6 +55,7 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
 
   async function stop() {
     setError(null);
+    setMismatch(null);
     setBusy(true);
     try {
       if (isPassword || isRandomText) await api.unlock(session.blockListId, entry);
@@ -46,8 +68,19 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
           `This block is locked for another ${formatDuration(e.remainingSeconds ?? session.remainingSeconds)}. `
           + "There is no way to end it early.",
         );
+      } else if (e instanceof ApiError && e.status === 401 && isRandomText) {
+        setCooldown(e.retryAfterSeconds ?? 0);
+        if (e.mismatchIndex !== undefined) {
+          setMismatch(e.mismatchIndex);
+          setError(null);
+        } else {
+          setError("That doesn't match — check every character.");
+        }
+      } else if (e instanceof ApiError && e.status === 429) {
+        setCooldown(e.retryAfterSeconds ?? 1);
+        setError(e.message);
       } else if (e instanceof ApiError && e.status === 401) {
-        setError(isRandomText ? "That doesn't match — check every character." : "Incorrect password.");
+        setError("Incorrect password.");
       } else {
         setError(e instanceof ApiError ? e.message : String(e));
       }
@@ -91,9 +124,10 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
             <label htmlFor="retype">Your entry</label>
             <textarea
               id="retype"
+              ref={retypeRef}
               autoFocus
               value={entry}
-              onChange={(e) => setEntry(e.target.value)}
+              onChange={(e) => { setEntry(e.target.value); setMismatch(null); }}
               onPaste={block}
               onDrop={block}
               onContextMenu={block}
@@ -105,6 +139,7 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
               style={{ width: "100%", fontFamily: "monospace", wordBreak: "break-all", resize: "none" }}
             />
             <div className="meta">{entry.length} / {expectedLength} characters</div>
+            {mismatch !== null && <MismatchHint entry={entry} index={mismatch} expectedLength={expectedLength} />}
           </>
         )}
 
@@ -117,12 +152,42 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
           <button
             className="danger"
             onClick={stop}
-            disabled={busy || (isPassword && !entry) || (isRandomText && entry.length !== expectedLength)}
+            disabled={busy || cooldown > 0 || ((isPassword || isRandomText) && !entry)}
           >
-            Stop
+            {cooldown > 0 ? `Wait ${cooldown}s` : "Stop"}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+const HINT_CONTEXT = 20;
+
+/// Names the first wrong character and shows it in place within a short stretch of the user's own
+/// entry. Only what they typed is shown — never what it should have been. You can submit a partial
+/// entry to check your progress so far, so "ends too early" is an ordinary outcome, not an error.
+function MismatchHint({ entry, index, expectedLength }: { entry: string; index: number; expectedLength: number }) {
+  const typed = entry[index];
+  const start = Math.max(0, index - HINT_CONTEXT);
+  const end = Math.min(entry.length, index + HINT_CONTEXT + 1);
+
+  return (
+    <div className="error">
+      {typed === undefined
+        ? <>Correct so far — the text continues after character {index}.</>
+        : index >= expectedLength
+          ? <>Too long — the text ends after character {expectedLength}; delete from character {index + 1} on.</>
+          : <>Character {index + 1} is wrong — you typed <code>{typed === " " ? "a space" : typed}</code>.</>}
+      {typed !== undefined && (
+        <div style={{ fontFamily: "monospace", whiteSpace: "pre", overflow: "hidden", marginTop: 4 }}>
+          {start > 0 && "…"}
+          {entry.slice(start, index)}
+          <mark>{typed === " " ? "␣" : typed}</mark>
+          {entry.slice(index + 1, end)}
+          {end < entry.length && "…"}
+        </div>
+      )}
     </div>
   );
 }

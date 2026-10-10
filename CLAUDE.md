@@ -16,7 +16,7 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite (327 tests)
+dotnet test                                    # full suite (347 tests)
 cd web && npm run build                        # build the UI into the service's wwwroot
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace
@@ -200,6 +200,14 @@ response would be trivially scriptable, and even the image is word-wrapped at wo
 a screenshot-to-OCR round-trip is the least-friction bypass, not a one-liner. Unlocking is a
 case-sensitive exact retype (`StringComparison.Ordinal`), no time gate.
 
+A wrong retype answers 401 with the index of the **first** wrong character
+(`RandomText.FirstMismatchIndex`) — never every wrong position, which would let a script recover
+the text in one guess per letter, and never the expected character. Even first-mismatch is an
+oracle, so `UnlockThrottle` refuses further attempts on that list for 5s (monotonic clock) with a
+429, *before* evaluating them. `/unlock` and `/blocklists/{id}/stop` share one path
+(`AttemptStopAsync`) so neither is an unthrottled side door. The feedback explains a refusal; the
+decision is still `StopPolicy`'s alone.
+
 ### `SessionManager` is the only mutator
 
 Nothing else changes session state, and nothing else decides whether a session may stop — it
@@ -262,3 +270,5 @@ This project is being built spec-first with TDD: red, green, commit, one behavio
 Tests for the adversarial cases (clock tampering, corrupt records, renamed executables) are
 the point of the exercise, not overhead — the backward-jump flaw in `ElapsedCalculator` was
 found by a test, not by review.
+
+Never commit on `main`. Always commit on a branch of `main` (or a branch of that branch).
