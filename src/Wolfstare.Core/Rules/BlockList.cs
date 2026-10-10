@@ -1,7 +1,7 @@
 namespace Wolfstare.Core.Rules;
 
 /// <summary>
-/// A named set of rules the user starts a session against — Cold Turkey calls these "blocks".
+/// A named set of rules the user starts a session against.
 /// </summary>
 public sealed record BlockList(
     Guid Id,

@@ -1,7 +1,6 @@
 # Wolfstare
 
-A local, bypass-resistant website and application blocker for Windows, in the spirit of
-Cold Turkey Blocker.
+A local, bypass-resistant website and application blocker for Windows.
 
 A Windows service running as `LocalSystem` owns all enforcement and all authority. The
 browser UI and the CLI are thin clients over a documented local HTTP API — so anything that

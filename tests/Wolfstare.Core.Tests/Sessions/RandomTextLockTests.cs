@@ -5,7 +5,7 @@ using Wolfstare.Core.Time;
 namespace Wolfstare.Core.Tests.Sessions;
 
 /// <summary>
-/// The random-text lock (Cold Turkey's "type this to unlock"). The required text is not a
+/// The random-text lock ("type this to unlock"). The required text is not a
 /// secret — it is shown to the user — so this is friction, not cryptography. Stopping requires
 /// retyping it exactly.
 /// </summary>

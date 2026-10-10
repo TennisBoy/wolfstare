@@ -185,30 +185,69 @@ public static class ApiEndpoints
         return Results.File(UnlockChallengeImage.RenderPng(rt.RequiredText), "image/png");
     }
 
-    private static async Task<IResult> StopSession(
+    private static Task<IResult> StopSession(
         Guid id,
         StopSessionRequest? request,
         SessionManager manager,
+        UnlockThrottle throttle,
         Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
         ILoggerFactory loggerFactory,
         CancellationToken ct)
-    {
-        var outcome = await manager.StopAsync(id, request?.Password, ct);
-        if (outcome == StopOutcome.Allowed) await SafeRefreshAsync(refresh, loggerFactory, ct);
-        return Translate(outcome, await Remaining(id, manager, ct));
-    }
+        => AttemptStopAsync(id, request?.Password, manager, throttle, refresh, loggerFactory, ct);
 
-    private static async Task<IResult> Unlock(
+    private static Task<IResult> Unlock(
         UnlockRequest request,
         SessionManager manager,
+        UnlockThrottle throttle,
+        Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
+        ILoggerFactory loggerFactory,
+        CancellationToken ct)
+        => AttemptStopAsync(request.BlockListId, request.Password, manager, throttle, refresh, loggerFactory, ct);
+
+    /// <summary>
+    /// The one path both <c>/stop</c> and <c>/unlock</c> take, so neither is an unthrottled side
+    /// door. For a random-text lock, a wrong retype answers with the position of the first wrong
+    /// character and starts a cooldown; an attempt during the cooldown is refused with 429
+    /// <em>before</em> it is evaluated, so it reveals nothing — not even that it was right.
+    /// The allow/deny decision itself is still <see cref="StopPolicy"/>'s alone.
+    /// </summary>
+    private static async Task<IResult> AttemptStopAsync(
+        Guid blockListId,
+        string? password,
+        SessionManager manager,
+        UnlockThrottle throttle,
         Wolfstare.Service.Enforcement.IEnforcementRefresh refresh,
         ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
-        var outcome = await manager.StopAsync(request.BlockListId, request.Password, ct);
+        var session = (await manager.GetActiveAsync(ct)).FirstOrDefault(s => s.BlockListId == blockListId);
+        var randomText = session?.Lock as RandomTextLock;
+
+        if (randomText is not null && throttle.Remaining(blockListId) is { } wait)
+        {
+            return Results.Json(
+                new UnlockRefusedDto(
+                    $"Wait {CeilingSeconds(wait)} seconds before trying again.", null, CeilingSeconds(wait)),
+                statusCode: StatusCodes.Status429TooManyRequests);
+        }
+
+        var outcome = await manager.StopAsync(blockListId, password, ct);
         if (outcome == StopOutcome.Allowed) await SafeRefreshAsync(refresh, loggerFactory, ct);
-        return Translate(outcome, await Remaining(request.BlockListId, manager, ct));
+
+        if (randomText is not null && outcome == StopOutcome.PasswordIncorrect)
+        {
+            throttle.RecordFailure(blockListId);
+            var index = RandomText.FirstMismatchIndex(randomText.RequiredText, password ?? "");
+            return Results.Json(
+                new UnlockRefusedDto(
+                    "That doesn't match.", index, throttle.Remaining(blockListId) is { } w ? CeilingSeconds(w) : null),
+                statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        return Translate(outcome, await Remaining(blockListId, manager, ct));
     }
+
+    private static int CeilingSeconds(TimeSpan span) => (int)Math.Ceiling(span.TotalSeconds);
 
     /// <summary>
     /// Kicks enforcement to reconcile immediately after a session change, but never lets that
