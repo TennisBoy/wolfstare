@@ -156,6 +156,62 @@ public static class RandomText
         return builder.ToString();
     }
 
+    /// <summary>The shortest length <see cref="GenerateExact"/> accepts.</summary>
+    public const int MinExactLength = 30;
+
+    // Words grouped by length, for filling the tail of an exact-length text.
+    private static readonly Dictionary<int, string[]> WordsByLength =
+        Words.GroupBy(w => w.Length).ToDictionary(g => g.Key, g => g.ToArray());
+
+    /// <summary>
+    /// Produces space-separated random words of exactly <paramref name="length"/> characters.
+    ///
+    /// Used when a challenge is replaced (the user left the unlock page). <see cref="Generate"/>
+    /// can stop up to a word short of its target, so replacing a challenge with it would let
+    /// every replacement shave a few characters off — leaving the tab repeatedly would whittle
+    /// the lock down. This one fills greedily, then closes the last gap with two words chosen to
+    /// land on the exact length.
+    /// </summary>
+    public static string GenerateExact(int length)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(length, MinExactLength);
+
+        // Every gap from 12 to 22 can be closed by " a b" for two words of 3..10 letters, and
+        // the greedy phase (each word costs at most 11) always stops with a gap in that range.
+        const int tail = 22;
+
+        var builder = new StringBuilder(length);
+        while (length - builder.Length > tail)
+        {
+            var word = Words[RandomNumberGenerator.GetInt32(Words.Length)];
+            if (builder.Length > 0) builder.Append(' ');
+            builder.Append(word);
+        }
+
+        var gap = length - builder.Length;
+        var letters = builder.Length == 0 ? gap - 1 : gap - 2; // separating spaces
+        var firstLengths = WordsByLength.Keys
+            .Where(a => WordsByLength.ContainsKey(letters - a))
+            .ToArray();
+
+        // Unreachable given the vocabulary's 3..10-letter range; fail loudly rather than return
+        // a challenge of the wrong length.
+        if (firstLengths.Length == 0)
+            throw new InvalidOperationException($"Cannot close a gap of {gap} characters.");
+
+        var first = firstLengths[RandomNumberGenerator.GetInt32(firstLengths.Length)];
+        if (builder.Length > 0) builder.Append(' ');
+        builder.Append(RandomWordOfLength(first)).Append(' ').Append(RandomWordOfLength(letters - first));
+
+        return builder.ToString();
+    }
+
+    private static string RandomWordOfLength(int length)
+    {
+        var words = WordsByLength[length];
+        return words[RandomNumberGenerator.GetInt32(words.Length)];
+    }
+
     /// <summary>
     /// The index of the first character where <paramref name="attempt"/> differs from
     /// <paramref name="required"/> (ordinal, case-sensitive), or null if they match exactly. A

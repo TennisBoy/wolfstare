@@ -93,6 +93,27 @@ public sealed class SessionManager(
     }
 
     /// <summary>
+    /// Replaces a random-text lock's challenge with new words of exactly the same length — the
+    /// user left the unlock page, so whatever they had read or typed is void. Nothing else about
+    /// the session changes, and it can only make the lock harder, never easier: the length is
+    /// preserved exactly, so it is safe to allow while locked. Returns false when there is no
+    /// active random-text session for the list.
+    /// </summary>
+    public async Task<bool> RegenerateChallengeAsync(Guid blockListId, CancellationToken ct = default)
+    {
+        var session = (await sessions.GetActiveAsync(ct))
+            .FirstOrDefault(s => s.BlockListId == blockListId);
+
+        if (session?.Lock is not RandomTextLock current
+            || current.RequiredText.Length < RandomText.MinExactLength)
+            return false;
+
+        var replaced = new RandomTextLock(RandomText.GenerateExact(current.RequiredText.Length));
+        await sessions.SaveAsync(session with { Lock = replaced }, ct);
+        return true;
+    }
+
+    /// <summary>
     /// Accrues time for every active session, persists the checkpoint, and ends any that have
     /// expired. Called on a timer by the service.
     /// </summary>

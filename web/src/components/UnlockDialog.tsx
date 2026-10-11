@@ -43,15 +43,57 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
   const isRandomText = session.lockKind === "randomtext";
   const expectedLength = session.unlockTextLength ?? 0;
 
+  // Bumped whenever the server has replaced the challenge, to load the new image.
+  const [challengeVersion, setChallengeVersion] = useState(0);
+  const [wasReset, setWasReset] = useState(false);
+
+  // Leaving the page — hiding the tab or switching to another window — replaces the challenge
+  // with new words of the same length, so the text can't be carried into another app and
+  // whatever was typed is void. The reset is requested on leaving (not on return), so it
+  // happens even if the user never comes back to this tab. Closing the dialog does the same.
+  useEffect(() => {
+    if (!isRandomText) return;
+    const id = session.blockListId;
+    let pendingReset: Promise<unknown> | null = null;
+
+    const leave = () => {
+      if (pendingReset) return;  // blur and visibilitychange both fire; reset once per leave
+      pendingReset = api.resetChallenge(id).catch(() => undefined);
+    };
+    const comeBack = async () => {
+      if (!pendingReset || document.visibilityState === "hidden") return;
+      const reset = pendingReset;
+      pendingReset = null;
+      await reset;  // load the image only after the server has replaced the text
+      setEntry("");
+      setMismatch(null);
+      setError(null);
+      setWasReset(true);
+      setChallengeVersion((v) => v + 1);
+    };
+    const onVisibility = () => (document.visibilityState === "hidden" ? leave() : comeBack());
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("blur", leave);
+    window.addEventListener("focus", comeBack);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("blur", leave);
+      window.removeEventListener("focus", comeBack);
+      if (!pendingReset) void api.resetChallenge(id).catch(() => undefined);
+    };
+  }, [isRandomText, session.blockListId]);
+
   // Load the unlock text as an image (only for a random-text lock).
   useEffect(() => {
     if (!isRandomText) return;
     let revoked: string | null = null;
+    setImageUrl(null);
     api.unlockImageUrl(session.blockListId)
       .then((url) => { revoked = url; setImageUrl(url); })
       .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
     return () => { if (revoked) URL.revokeObjectURL(revoked); };
-  }, [isRandomText, session.blockListId]);
+  }, [isRandomText, session.blockListId, challengeVersion]);
 
   async function stop() {
     setError(null);
@@ -116,6 +158,10 @@ export function UnlockDialog({ session, onClose, onStopped }: Props) {
         {isRandomText && (
           <>
             <label>Retype this exactly ({expectedLength} characters) — no pasting</label>
+            <div className="meta">Leaving this page replaces the text with new words.</div>
+            {wasReset && (
+              <div className="error">You left the page, so the text was replaced and your entry cleared.</div>
+            )}
             {imageUrl
               ? <div className="challenge-image">
                   <img src={imageUrl} alt="" draggable={false} onContextMenu={block} />

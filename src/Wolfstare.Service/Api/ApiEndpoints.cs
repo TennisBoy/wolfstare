@@ -37,6 +37,7 @@ public static class ApiEndpoints
         api.MapPost("/blocklists/{id:guid}/start", StartSession);
         api.MapPost("/blocklists/{id:guid}/stop", StopSession);
         api.MapGet("/blocklists/{id:guid}/unlock-image", GetUnlockImage);
+        api.MapPost("/blocklists/{id:guid}/challenge/reset", ResetChallenge);
         api.MapPost("/unlock", Unlock);
     }
 
@@ -145,7 +146,7 @@ public static class ApiEndpoints
             return Results.BadRequest(new ErrorDto(
                 $"Random-text length must be between {RandomTextLockMinLength} and {RandomTextLockMaxLength} characters."));
 
-        SessionLock sessionLock = new RandomTextLock(RandomText.Generate(length));
+        SessionLock sessionLock = new RandomTextLock(RandomText.GenerateExact(length));
 
         var duration = request.DurationMinutes is { } minutes ? minutes * 60 : (long?)null;
         if (duration is <= 0)
@@ -184,6 +185,14 @@ public static class ApiEndpoints
 
         return Results.File(UnlockChallengeImage.RenderPng(rt.RequiredText), "image/png");
     }
+
+    /// <summary>
+    /// Replaces the challenge with new words of the same length; the UI calls it when the user
+    /// leaves the unlock page. Allowed under a lock — unlike edit or delete it can only make the
+    /// lock harder, never weaker, because the length is preserved exactly.
+    /// </summary>
+    private static async Task<IResult> ResetChallenge(Guid id, SessionManager manager, CancellationToken ct)
+        => await manager.RegenerateChallengeAsync(id, ct) ? Results.NoContent() : Results.NotFound();
 
     private static Task<IResult> StopSession(
         Guid id,

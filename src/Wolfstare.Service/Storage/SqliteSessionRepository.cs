@@ -80,8 +80,15 @@ public sealed class SqliteSessionRepository(
                 elapsed_seconds = excluded.elapsed_seconds,
                 checkpoint_wall_utc = excluded.checkpoint_wall_utc,
                 checkpoint_monotonic_ms = excluded.checkpoint_monotonic_ms,
-                integrity_mac = excluded.integrity_mac;
+                integrity_mac = excluded.integrity_mac,
+                lock_text = CASE
+                    WHEN lock_kind = 'randomtext' AND excluded.lock_kind = 'randomtext'
+                    THEN excluded.lock_text ELSE lock_text END;
             """;
+        // The lock is otherwise immutable on update — a save can never change its kind. The one
+        // exception is a random-text challenge being replaced with new words of the same length
+        // (SessionManager.RegenerateChallengeAsync), which can only make the lock harder. Without
+        // it the MAC would cover the new text while the row kept the old one.
 
         command.Parameters.AddWithValue("$id", session.Id.ToString());
         command.Parameters.AddWithValue("$blockListId", session.BlockListId.ToString());
