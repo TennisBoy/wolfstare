@@ -279,3 +279,6 @@ the point of the exercise, not overhead — the backward-jump flaw in `ElapsedCa
 found by a test, not by review.
 
 Never commit on `main`. Always commit on a branch of `main` (or a branch of that branch).
+
+Dated notes on past surprises and their causes live in `docs/learnings/` — skim them before
+touching the unlock flow, persistence, or install/reinstall. Add one when something surprises you.
