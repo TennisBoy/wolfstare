@@ -75,6 +75,15 @@ export const api = {
   unlock: (blockListId: string, password: string) =>
     request<void>("POST", "/unlock", { blockListId, password }),
 
+  // Replaces the challenge with new words of the same length. keepalive lets the request finish
+  // even if the user is closing or navigating away from the page.
+  resetChallenge: (id: string) =>
+    fetch(`/api/blocklists/${id}/challenge/reset`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token()}` },
+      keepalive: true,
+    }),
+
   // The unlock text is served only as an image, never as a string, so a script can't read it
   // and post it back. Returns an object URL for an <img>.
   unlockImageUrl: async (id: string): Promise<string> => {

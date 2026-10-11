@@ -16,7 +16,7 @@ mechanisms. Phase plans live in `docs/superpowers/plans/`.
 
 ```bash
 dotnet build                                   # build the solution
-dotnet test                                    # full suite (347 tests)
+dotnet test                                    # full suite (362 tests)
 cd web && npm run build                        # build the UI into the service's wwwroot
 dotnet test --filter StopPolicyTests           # one test class
 dotnet test --filter "FullyQualifiedName~Time" # one namespace
@@ -193,7 +193,7 @@ hatch would have to show up in a diff rather than hiding in a config flag.
 why the clock-tamper and integrity machinery above still matters). But the create endpoint
 refuses anything but `"randomtext"` with a 400 — the user chose random-text as the *only* lock.
 The challenge is a run of whole words (`RandomText.Generate`, grade-12 vocabulary), 100–5000
-chars (`RandomTextLockMin/MaxLength`, packed up to the target so 3888 requested yields ~3885),
+chars (`RandomTextLockMin/MaxLength`, generated to the **exact** length by `RandomText.GenerateExact`),
 and it is served **only** as a PNG (`/blocklists/{id}/unlock-image`) — never as text. `/api/status`
 returns `UnlockTextLength`, not the string. The PNG-only path is deliberate: text in the API
 response would be trivially scriptable, and even the image is word-wrapped at word boundaries so
@@ -207,6 +207,13 @@ oracle, so `UnlockThrottle` refuses further attempts on that list for 5s (monoto
 429, *before* evaluating them. `/unlock` and `/blocklists/{id}/stop` share one path
 (`AttemptStopAsync`) so neither is an unthrottled side door. The feedback explains a refusal; the
 decision is still `StopPolicy`'s alone.
+
+Leaving the unlock page (tab hidden, or the window loses focus) or closing the dialog replaces the
+challenge with new words (`POST /blocklists/{id}/challenge/reset` → `SessionManager.RegenerateChallengeAsync`).
+It is allowed under a lock because it preserves the length **exactly** — `GenerateExact`, never
+`Generate`, which stops short and would let repeated resets whittle the lock down. The SQLite
+upsert otherwise never touches the lock; it updates `lock_text` only when both old and new kinds
+are random-text, so a save still cannot change a lock's kind and the MAC matches the stored text.
 
 ### `SessionManager` is the only mutator
 
