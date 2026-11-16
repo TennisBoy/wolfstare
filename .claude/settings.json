@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|WebFetch|mcp__.*(playwright|context-mode).*",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "& \"$env:CLAUDE_PROJECT_DIR\\.claude\\hooks\\guard-live-instance.ps1\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
