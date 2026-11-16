@@ -1,0 +1,11 @@
+#!/bin/sh
+# Refuse commits made directly on main. Work happens on a branch and reaches main through a
+# pull request (see "Working practice" in CLAUDE.md). Enable once per clone with:
+#   git config core.hooksPath .githooks
+
+branch=$(git symbolic-ref --quiet --short HEAD)
+if [ "$branch" = "main" ]; then
+  echo "pre-commit: refusing to commit on 'main'. Create a branch first: git switch -c <name>" >&2
+  exit 1
+fi
+exit 0
